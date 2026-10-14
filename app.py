@@ -11,11 +11,12 @@ from cash_flow import annual_waterfall, waterfall_html
 from visuals import CSS, building_massing, finance_stack, waterfall_chart
 from neighborhood_map import render_map, nearest_neighborhood
 from student_report import create_student_pdf
+from forecast import ForecastAssumptions, project
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.5.1 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
+st.caption('CLASSROOM EDITION v1.6 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -28,6 +29,12 @@ def load(name, scenario):
 
 # Streamlit runs button callbacks BEFORE widgets are created on the next rerun.
 # Never assign widget-owned session state after the widget is instantiated.
+def reset_case():
+    load(st.session_state.neighborhood,st.session_state.scenario)
+    st.session_state.baseline_values=neighborhood_inputs(st.session_state.neighborhood,st.session_state.scenario)
+    st.session_state.comparison={}
+    st.session_state.pop('latest_shock',None)
+
 def apply_density_bonus():
     units = st.session_state['x_units']
     st.session_state['x_units'] = min(500, int(round(units * 1.25 / 10) * 10))
@@ -68,6 +75,7 @@ if st.sidebar.button('↻ Load selected neighborhood and scenario',use_container
     st.session_state.baseline_values=neighborhood_inputs(place,scenario)
     st.rerun()
 st.sidebar.caption('Changing selections alone preserves your custom inputs. Click Load to apply a different starting case.')
+st.sidebar.button('Reset project inputs to selected baseline',on_click=reset_case,use_container_width=True)
 
 st.sidebar.subheader('Reality Check')
 st.sidebar.selectbox('Unexpected development event',list(SHOCKS),key='shock_choice')
@@ -115,7 +123,7 @@ if presentation:
       [data-testid="stMetricValue"]{font-size:2.1rem!important}
     </style>""",unsafe_allow_html=True)
     st.caption('Projector tip: press F11 in your browser for true full-screen; toggle this switch off to restore inputs.')
-tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes'])
+tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes','📈 Ten-year outlook'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
@@ -220,7 +228,13 @@ with tabs[1]:
 with tabs[2]:
     st.subheader('Explore DC neighborhoods on the map')
     st.caption('Click one of the neighborhood markers to load its illustrative development baseline. Map points represent approximate neighborhood centers, not parcel locations. Map tiles use OpenStreetMap without an API key; internet access is required.')
-    map_event=render_map(place)
+    map_event=None
+    if st.checkbox('Display online interactive map (requires external map tiles)',value=True,key='display_online_map'):
+        try:
+            map_event=render_map(place)
+        except Exception:
+            st.warning('Map service unavailable. Use the neighborhood dropdown in the sidebar; all financial controls still work.')
+    st.caption('Fallback: choose a neighborhood from the sidebar and click Load selected neighborhood and scenario. No map API key is necessary for the model.')
     clicked=nearest_neighborhood((map_event or {}).get('last_object_clicked'))
     if clicked and clicked != place:
         st.session_state['pending_map_neighborhood']=clicked
@@ -377,3 +391,43 @@ with tabs[6]:
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
 st.divider();st.caption('DC Housing Lab v1.5 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+
+with tabs[7]:
+    st.subheader('Ten-year operating and affordability preservation outlook')
+    st.caption('Starts with the stabilized operating assumptions. Market and restricted rents grow separately; operating expenses, replacement reserves and debt repayment are forecast annually. Illustrative analysis, not a regulated rent schedule or investment offering.')
+    f1,f2,f3=st.columns(3)
+    with f1:
+        mg=st.slider('Market rent growth (% / year)',-3.0,8.0,3.0,0.5,key='f_market')
+        ag=st.slider('Restricted rent growth (% / year)',-3.0,8.0,1.5,0.5,key='f_restricted')
+        exp=st.slider('Operating expense inflation (% / year)',0.0,10.0,3.5,0.5,key='f_expense')
+    with f2:
+        vac=st.slider('Projected vacancy / bad debt (%)',0.0,20.0,float(p.vacancy_pct),0.5,key='f_vacancy')
+        reserve=st.slider('Year 1 replacement reserve ($ / home / year)',0,2000,400,50,key='f_reserve')
+    with f3:
+        exit_cap=st.slider('Exit capitalization rate (%)',3.0,10.0,6.0,0.25,key='f_exit_cap')
+        exit_cost=st.slider('Disposition costs (% of sale price)',0.0,8.0,2.0,0.5,key='f_sale_cost')
+    a=ForecastAssumptions(mg,ag,exp,vac,reserve,exit_cap,exit_cost)
+    forecast=project(p,r,a)
+    x1,x2,x3,x4=st.columns(4)
+    x1.metric('Year 10 NOI',fm(forecast['rows'][-1]['noi']))
+    x2.metric('Net sale to equity',fm(forecast['net_sale_to_equity']))
+    x3.metric('Equity multiple',f"{forecast['equity_multiple']:.2f}×" if forecast['equity_multiple'] is not None else 'N/A')
+    x4.metric('10-year equity IRR',f"{forecast['equity_irr']*100:.1f}%" if forecast['equity_irr'] is not None else 'N/A')
+    if forecast['expense_growth_exceeds_restricted_growth']:
+        st.warning('Expense inflation exceeds restricted rent growth. This can compress operating margins, especially as the affordable housing share increases.')
+    if forecast['minimum_cash_flow']<0:
+        st.error('At least one forecast year has negative operating cash flow after reserves and modeled debt service.')
+    if r['additional_equity_needed']>0:
+        st.warning('Capital stack still has an unfunded equity requirement. Return metrics assume the full required equity is contributed at inception.')
+    df_f=pd.DataFrame(forecast['rows'])
+    st.line_chart(df_f.set_index('year')[['noi','cash_flow_to_equity']],x_label='Operating year',y_label='Annual dollars ($)')
+    st.markdown('#### Annual projected operations and debt amortization')
+    annual_cols=['year','scheduled_rent','effective_income','operating_expenses','noi','replacement_reserve','total_debt_service','cash_flow_to_equity','public_balance','private_balance']
+    labels={'year':'Year','scheduled_rent':'Scheduled rent ($)','effective_income':'Effective income ($)','operating_expenses':'Operating expenses ($)','noi':'NOI ($)','replacement_reserve':'Reserves ($)','total_debt_service':'Debt service ($)','cash_flow_to_equity':'Cash flow to equity ($)','public_balance':'Public loan balance ($)','private_balance':'Private loan balance ($)'}
+    output=df_f[annual_cols].rename(columns=labels)
+    st.dataframe(output.style.format({c:money for c in output.columns if c.endswith('($)')}),use_container_width=True,hide_index=True)
+    st.download_button('Download ten-year forecast (CSV)',output.to_csv(index=False).encode('utf-8'),file_name='dc_housing_lab_10_year_forecast.csv',mime='text/csv')
+    with st.expander('Disposition method, investor returns and model limitations'):
+        st.write(f"Year 11 projected NOI: {money(forecast['year_11_noi'])}; gross exit value: {money(forecast['sale_price'])}; selling costs: {money(forecast['selling_cost'])}; loan balances repaid at sale: {money(forecast['ending_debt'])}.")
+        st.write('Value = Year 11 NOI / exit cap rate. Net sale = gross sale price minus selling costs and outstanding public and private loan balances. IRR uses initial total required equity, ten annual operating cash flows, and net sale proceeds in Year 10. A negative net sale represents a residual obligation rather than a guaranteed equity distribution.')
+        st.write('Loan amortization uses original balances and terms; maturity refinancing, balloon provisions, capital improvements beyond modeled reserves, income taxes, reinvestment, income-limit updates, tax credit compliance, and public-loan cash sweeps are not modeled. Restricted rent growth is a hypothetical assumption, not a statement of legally permitted increases. Multiple IRRs or nonconventional cash flows may require more detailed analysis.')
