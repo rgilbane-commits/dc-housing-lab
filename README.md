@@ -33,3 +33,7 @@
 - The 'presentation mode' is CSS-based; F11 is needed for true browser full-screen.
 - This package passed unit/regression and generated-PDF visual tests but **was not live-browser tested** in the deployed Streamlit environment. The new Folium integration therefore requires a hosted smoke test.
 - Student downloads are per-browser-session. This is not an online multiplayer service.
+
+
+## v1.5.1 map hotfix
+Switched the Folium background tile source to OpenStreetMap (no API key required). Clickable neighborhood markers and existing map-selection handling are preserved. Map imagery still requires internet access, and tile accessibility depends on the network/provider. No model calculations changed.

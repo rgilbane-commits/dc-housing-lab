@@ -25,7 +25,7 @@ def distance_km(lat1, lon1, lat2, lon2):
     return r*2*math.atan2(math.sqrt(a),math.sqrt(1-a))
 
 def render_map(selected):
-    m=folium.Map(location=[38.9072,-77.034],zoom_start=11,tiles='CartoDB positron',control_scale=True)
+    m=folium.Map(location=[38.9072,-77.034],zoom_start=11,tiles='OpenStreetMap',control_scale=True)
     for name,(lat,lon) in NEIGHBORHOOD_CENTERS.items():
         folium.CircleMarker(location=[lat,lon],radius=12 if name==selected else 10,
             color='#102a43' if name==selected else '#167d91',weight=3,

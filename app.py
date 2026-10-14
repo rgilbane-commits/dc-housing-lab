@@ -15,7 +15,7 @@ from student_report import create_student_pdf
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.5 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
+st.caption('CLASSROOM EDITION v1.5.1 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -219,7 +219,7 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader('Explore DC neighborhoods on the map')
-    st.caption('Click one of the neighborhood markers to load its illustrative development baseline. Map points represent approximate neighborhood centers, not parcel locations. Map tiles require internet access.')
+    st.caption('Click one of the neighborhood markers to load its illustrative development baseline. Map points represent approximate neighborhood centers, not parcel locations. Map tiles use OpenStreetMap without an API key; internet access is required.')
     map_event=render_map(place)
     clicked=nearest_neighborhood((map_event or {}).get('last_object_clicked'))
     if clicked and clicked != place:
