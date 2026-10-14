@@ -8,7 +8,7 @@ from classroom import HOUSEHOLDS, household_results, building_html, tradeoff_mes
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.2 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.caption('CLASSROOM EDITION v1.2.1 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'neighborhood' not in st.session_state: st.session_state.neighborhood=list(NEIGHBORHOODS)[0]
@@ -17,6 +17,18 @@ if 'scenario' not in st.session_state: st.session_state.scenario=list(PRESETS)[0
 def load(name, scenario):
     p=neighborhood_inputs(name,scenario)
     for f in p.__dataclass_fields__: st.session_state['x_'+f]=getattr(p,f)
+
+# Streamlit runs button callbacks BEFORE widgets are created on the next rerun.
+# Never assign widget-owned session state after the widget is instantiated.
+def apply_density_bonus():
+    units = st.session_state['x_units']
+    st.session_state['x_units'] = min(500, int(round(units * 1.25 / 10) * 10))
+
+def apply_land_contribution():
+    st.session_state['x_land_credit_m'] = min(30.0, st.session_state['x_land_credit_m'] + 10.0)
+
+def apply_grant():
+    st.session_state['x_grant_m'] = min(100.0, st.session_state['x_grant_m'] + 10.0)
 
 if 'x_units' not in st.session_state: load(st.session_state.neighborhood,st.session_state.scenario)
 if 'baseline_values' not in st.session_state:
@@ -91,18 +103,15 @@ with tabs[2]:
     with x:
         st.markdown('**Density bonus: +25% homes**')
         st.caption('Increases homes and development cost; assumes rents/cost per unit do not change.')
-        if st.button('Apply density bonus',use_container_width=True):
-            st.session_state.x_units=min(500,int(round(p.units*1.25/10)*10));st.rerun()
+        st.button('Apply density bonus',use_container_width=True,on_click=apply_density_bonus)
     with y:
         st.markdown('**Public land contribution: +$10M**')
         st.caption('Reduces net development cost; the land has a real public opportunity cost.')
-        if st.button('Apply land contribution',use_container_width=True):
-            st.session_state.x_land_credit_m=min(30.0,p.land_credit_m+10);st.rerun()
+        st.button('Apply land contribution',use_container_width=True,on_click=apply_land_contribution)
     with z:
         st.markdown('**Public grant: +$10M**')
         st.caption('Closes a gap through permanent cash support, subject to budget capacity.')
-        if st.button('Apply grant',use_container_width=True):
-            st.session_state.x_grant_m=min(100.0,p.grant_m+10);st.rerun()
+        st.button('Apply grant',use_container_width=True,on_click=apply_grant)
     st.divider()
     st.markdown('#### What if the city offers a loan instead?')
     st.write(f"Current public loan: **{fm(r['loan'])}**; annual payment: **{fm(r['annual_public_loan_payment'])}**. Loan coverage from total NOI: **{r['ds_coverage']:.2f}×**." if r['ds_coverage'] is not None else 'No repayable public loan selected.')
@@ -184,4 +193,4 @@ with tabs[5]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.2 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.2.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')

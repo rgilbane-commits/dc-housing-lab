@@ -1,3 +1,7 @@
+# v1.2.1 HOTFIX
+
+See `HOTFIX_v1.2.1.md` for the density bonus fix, regression tests, and deployment steps.
+
 # DC Housing Lab v1.2 — Sidwell Friends Classroom Edition
 
 **For October 14, 2026.** This is an interactive Streamlit teaching app, not an actual DC development feasibility study. All neighborhood rent/cost/density inputs are **hypothetical**, not measured or verified zoning entitlements. AMI figure is an **editable classroom illustration, not the official HUD income limit**.
