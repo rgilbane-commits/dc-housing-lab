@@ -12,11 +12,13 @@ from visuals import CSS, building_massing, finance_stack, waterfall_chart
 from neighborhood_map import render_map, nearest_neighborhood
 from student_report import create_student_pdf
 from forecast import ForecastAssumptions, project
+from public_policy import PublicPolicyAssumptions, evaluate
+from evidence import planning_area_context, district_production, records as evidence_sources
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.6 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
+st.caption('CLASSROOM EDITION v1.8 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -123,7 +125,7 @@ if presentation:
       [data-testid="stMetricValue"]{font-size:2.1rem!important}
     </style>""",unsafe_allow_html=True)
     st.caption('Projector tip: press F11 in your browser for true full-screen; toggle this switch off to restore inputs.')
-tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes','📈 Ten-year outlook'])
+tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes','📈 Ten-year outlook','🏛️ Public subsidy efficiency'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
@@ -240,6 +242,28 @@ with tabs[2]:
         st.session_state['pending_map_neighborhood']=clicked
         st.rerun()
     st.caption('The map is geographic context only. Rents, costs, density and zoning assumptions are educational scenarios, NOT verified neighborhood-level market or zoning data.')
+    st.divider()
+    st.subheader('DC evidence desk | historical government figures')
+    dc = district_production()
+    ctx = planning_area_context(place)
+    st.caption('These are government-reported historical observations for DC planning areas, NOT neighborhood-level rents, current affordable inventory, site zoning, or underwriting inputs. Planning-area boundaries differ from ward and neighborhood boundaries.')
+    c1,c2,c3=st.columns(3)
+    c1.metric('Districtwide homes delivered through Jul 2024',f"{dc['delivered_units']:,}",help='DMPED announcement dated July 29, 2024; not a current 2026 total.')
+    c2.metric(f"{ctx['area']} dedicated affordable units (2018)",f"{ctx['existing_2018']:,}",help='2018 planning-area inventory from 2019 Housing Equity Report; not current count.')
+    c3.metric(f"{ctx['area']} additional affordable-unit goal (2025)",f"{ctx['target_2025']:,}",help='Target from 2019 report, not achieved production.')
+    st.markdown(f"**Selected neighborhood:** {place}  |  **Context geography:** {ctx['area']} planning area")
+    st.info('Do not subtract the 2018 inventory from the 2025 target: the former is a stock of existing homes and the latter is a goal for additional affordable homes. Neither is the number of currently available apartments.')
+    st.markdown(f"[2019 Housing Equity Report]({ctx['source_url']}) · [July 2024 production announcement]({dc['source_url']})")
+    st.markdown('#### Compare historical planning-area context')
+    dc_rows=[]
+    for neighborhood in NEIGHBORHOODS:
+        item=planning_area_context(neighborhood)
+        dc_rows.append({'Neighborhood (reference point)':neighborhood,'DC planning area':item['area'],'Existing affordable units (2018)':item['existing_2018'],'Goal for additional units by 2025 (set 2019)':item['target_2025']})
+    st.dataframe(pd.DataFrame(dc_rows).style.format({'Existing affordable units (2018)':'{:,.0f}','Goal for additional units by 2025 (set 2019)':'{:,.0f}'}),hide_index=True,use_container_width=True)
+    with st.expander('Source register, observation periods and live-data links'):
+        st.dataframe(pd.DataFrame(evidence_sources()),hide_index=True,use_container_width=True)
+        st.caption('Links open official agency pages. Source dates are different; no live API results are represented as verified 2026 values.')
+        st.download_button('Download evidence source register (CSV)',pd.DataFrame(evidence_sources()).to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v1.8_Source_Register.csv',mime='text/csv')
     st.divider()
     st.subheader('Three public policy levers')
     st.write('Use the sidebar to change each intervention, or use the buttons below to apply the policies directly.')
@@ -390,7 +414,7 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.5 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.8 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
 
 with tabs[7]:
     st.subheader('Ten-year operating and affordability preservation outlook')
@@ -431,3 +455,44 @@ with tabs[7]:
         st.write(f"Year 11 projected NOI: {money(forecast['year_11_noi'])}; gross exit value: {money(forecast['sale_price'])}; selling costs: {money(forecast['selling_cost'])}; loan balances repaid at sale: {money(forecast['ending_debt'])}.")
         st.write('Value = Year 11 NOI / exit cap rate. Net sale = gross sale price minus selling costs and outstanding public and private loan balances. IRR uses initial total required equity, ten annual operating cash flows, and net sale proceeds in Year 10. A negative net sale represents a residual obligation rather than a guaranteed equity distribution.')
         st.write('Loan amortization uses original balances and terms; maturity refinancing, balloon provisions, capital improvements beyond modeled reserves, income taxes, reinvestment, income-limit updates, tax credit compliance, and public-loan cash sweeps are not modeled. Restricted rent growth is a hypothetical assumption, not a statement of legally permitted increases. Multiple IRRs or nonconventional cash flows may require more detailed analysis.')
+
+
+with tabs[8]:
+    st.subheader('Public subsidy efficiency | Policy-maker perspective')
+    st.caption('Compare upfront public outlays with the estimated present value of support. This is not a full governmental fiscal impact or cost-benefit analysis.')
+    pa,pb=st.columns(2)
+    with pa:
+        term=st.slider('Affordability restriction period (years)',10,60,30,5,key='pe_restriction_years')
+    with pb:
+        public_discount=st.slider('Public discount rate (%)',0.0,12.0,5.0,0.5,key='pe_discount_rate')
+    policy=evaluate(p,r,PublicPolicyAssumptions(term,public_discount))
+    one,two,three,four=st.columns(4)
+    one.metric('Restricted homes',integer(policy['restricted_homes']))
+    two.metric('Restricted home-years',integer(policy['restricted_unit_years']))
+    three.metric('Estimated public support (PV)',fm(policy['net_public_support_pv']))
+    four.metric('Support (PV) per restricted home-year',money(policy['support_pv_per_restricted_unit_year']) if policy['support_pv_per_restricted_unit_year'] is not None else 'N/A')
+    st.markdown('#### Public resource accounting')
+    ptable=pd.DataFrame([
+        {'Item':'Nonrepayable cash grant','Amount ($)':policy['grant'],'Method':'Full face amount'},
+        {'Item':'Public land value contributed','Amount ($)':policy['land_contribution_value'],'Method':'Assumed land cost discount; public opportunity cost'},
+        {'Item':'Repayable loan amount (gross funding)','Amount ($)':policy['loan_face'],'Method':'Gross cash advanced; not equivalent to a grant'},
+        {'Item':'Estimated concessional loan benefit (PV)','Amount ($)':policy['loan_pv_concession'],'Method':'Loan face less PV of amortizing repayments'},
+        {'Item':'Combined estimated public support (PV)','Amount ($)':policy['net_public_support_pv'],'Method':'Grant + land contribution + loan concession'}])
+    st.dataframe(ptable.style.format({'Amount ($)':money}),hide_index=True,use_container_width=True)
+    st.download_button('Download public subsidy efficiency (CSV)',ptable.to_csv(index=False).encode('utf-8'),file_name='dc_housing_lab_public_efficiency.csv',mime='text/csv',key='download_public_efficiency')
+    st.markdown('#### Grant versus loan — equal face amount')
+    face=st.slider('Compare additional public commitment ($M)',0,30,10,1,key='pe_equal_face')*1e6
+    discount_loan=evaluate(p,analyze(replace(p,loan_m=face/1e6,grant_m=0,land_credit_m=0)),PublicPolicyAssumptions(term,public_discount))
+    table=pd.DataFrame([
+      {'Instrument':'Nonrepayable grant','Public capital advanced ($)':face,'Net public support PV ($)':face},
+      {'Instrument':'Repayable amortizing loan','Public capital advanced ($)':face,'Net public support PV ($)':discount_loan['loan_pv_concession']}])
+    st.dataframe(table.style.format({'Public capital advanced ($)':money,'Net public support PV ($)':money}),hide_index=True,use_container_width=True)
+    st.caption('Loan illustration uses the current public loan rate and amortization. The public discount rate is a chosen classroom assumption, not an official DC borrowing rate. Negative loan concession values are possible when the loan yield exceeds the assumed discount rate.')
+    if not policy['restricted_homes']:
+        st.warning('No restricted homes: per-restricted-home metrics are N/A, not zero.')
+    if policy['restricted_homes'] and p.affordable_rent>p.market_rent:
+        st.warning('Restricted rent exceeds market rent in this scenario; the affordability designation is not proof of economic affordability.')
+    with st.expander('Interpretation, limitations and recommended classroom questions'):
+        for caution in policy['cautions']:st.write('• '+caution)
+        st.write('How should the District evaluate fewer deeply affordable units against more moderately restricted units? How should the public value of contributed land be counted? What if the borrower cannot repay the loan?')
+        st.write('A 30-year restriction is assumed if selected; the application does not verify a legally binding agreement. Comparing programs also requires incomes served, persistence, displacement avoided, location, and quality—not just cost per unit.')

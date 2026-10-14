@@ -1,0 +1,6 @@
+id,title,url,observation_period,geography,status
+"DC-HE-2019","DC Housing Equity Report (2019)","https://housing.dc.gov/sites/default/files/dc/sites/housingdc/page_content/attachments/Housing%20Equity%20Report%2010-15-19.pdf","2018 housing inventory / goals set in 2019 for 2025","DC planning areas","Historical baseline, not current inventory"
+"DC-PROD-2024","DC Mayor housing production announcement (July 29, 2024)","https://dc.gov/release/mayor-bowser-and-community-members-mark-significant-milestone-36000-new-homes-2025-0","2019 through July 29, 2024","Districtwide","Historical announced count, not current production"
+"DC-OP-ACS","DC Office of Planning Demographic Data Hub","https://opdatahub.dc.gov/","2020-2024 ACS 5-year estimates on hub","Multiple geographies (check each download)","Linked reference; no unsourced tract-level figures imported"
+"DC-GIS-AFF","DC GIS Affordable Housing feature layer","https://maps2.dcgis.dc.gov/DCGIS/rest/services/DCGIS_DATA/Property_and_Land/MapServer/62","Projects started or completed since Jan 2015; check record update dates","Geocoded projects","Linked feature layer; not counted in local snapshot"
+"DC-HOUSING-TRACK","DC Housing Tracker","https://housing.dc.gov/page/housing-tracker","Online tracker; check displayed update","Districtwide","Linked dashboard; no automatic live import"
