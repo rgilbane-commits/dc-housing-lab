@@ -7,11 +7,12 @@ from classroom import HOUSEHOLDS, household_results, building_html, tradeoff_mes
 from display_format import money, percentage, integer
 from upgrade import SHOCKS, shock, sensitivity, minimum_grant_to_margin, snapshot
 from capital_stack import breakdown, visual
+from cash_flow import annual_waterfall, waterfall_html
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.3.3 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.caption('CLASSROOM EDITION v1.3.4 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -130,6 +131,30 @@ with tabs[1]:
     csv_export=source_table.to_csv(index=False).encode('utf-8')
     st.download_button('Download capital stack (CSV)',data=csv_export,file_name='dc_housing_lab_capital_stack.csv',mime='text/csv',key='download_capital_stack')
     st.caption('Sources-and-uses is a funding check, not an appraisal or investment return. The land contribution reduces net project cost. Private loans are subject to the simplified debt-capacity tests; public loans are assumed available but must be repaid. Overfunded sources are disclosed, not interpreted as equity profits.')
+    st.markdown('### Annual operating cash-flow waterfall')
+    st.caption('Illustrative **stabilized annual** operations at the current rent and operating assumptions. This is one representative year, not a multi-year cash-flow forecast.')
+    cf=annual_waterfall(r)
+    st.markdown(waterfall_html(cf,lambda v:money(v,compact=True)),unsafe_allow_html=True)
+    wc1,wc2,wc3,wc4=st.columns(4)
+    wc1.metric('Annual NOI (before debt)',fm(cf['noi']))
+    wc2.metric('Total annual debt service',fm(cf['total_ds']))
+    wc3.metric('Annual cash flow to equity',fm(cf['cash_to_equity']))
+    wc4.metric('Cash-on-cash on required equity',f"{cf['cash_on_cash_pct']:.1f}%" if cf['cash_on_cash_pct'] is not None else 'N/A')
+    st.caption('Cash-on-cash = cash flow after modeled public and private debt service ÷ **total equity required** by the capital stack, not entered committed equity. Negative values are operating cash deficits. This is not IRR, total return, or a distribution forecast.')
+    if cf['equity_gap']>0.01:
+        st.warning(f"The capital stack still needs {fm(cf['equity_gap'])} additional equity; the cash-on-cash ratio assumes this full equity is raised. It does NOT mean a cash distribution is available to existing investors.")
+    if not cf['coverage_pass']:
+        st.error('Combined public and private debt payments fail the selected minimum DSCR. The modeled cash flow may be unsustainable even if it is positive.')
+    if cf['cash_to_equity']<0:
+        st.error('Modeled operations have negative cash flow after debt service: additional support or restructuring would be needed.')
+    if cf['equity_required']<=0:
+        st.info('No positive modeled equity requirement; cash-on-cash is not meaningful and is shown as N/A.')
+    cf_table=pd.DataFrame([{'Annual cash-flow line':label,'Amount ($/year)':amount} for label,amount in cf['rows']])
+    st.dataframe(cf_table.style.format({'Amount ($/year)':money}),hide_index=True,use_container_width=True)
+    st.download_button('Download annual cash-flow waterfall (CSV)',cf_table.to_csv(index=False).encode('utf-8'),file_name='dc_housing_lab_annual_cash_flow.csv',mime='text/csv',key='download_cash_flow')
+    with st.expander('What this waterfall includes and excludes'):
+        st.markdown('**Scheduled rent → collection/vacancy loss → operating expenses → NOI → public debt service → private debt service → annual cash flow to equity.** Loan proceeds, grants and equity are financing sources, **not annual rental income**. Debt payments are below NOI and therefore do not affect unlevered property value. The illustration excludes replacement reserves, capital expenditures, construction-period carry, income taxes, fees, depreciation, refinancing and sale proceeds; it assumes the loan terms are outstanding for the representative stabilized year. Actual distributable cash may be lower. The public loan is not independently capped by DSCR; a warning is shown if combined coverage fails.')
+
     st.markdown('### Private permanent loan and required equity')
     k1,k2,k3,k4=st.columns(4)
     k1.metric('Maximum supportable private loan',fm(r['private_debt_capacity']))
@@ -235,7 +260,7 @@ with tabs[4]:
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
         st.dataframe(df.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in df.columns if '($M)' in c}).format({c:lambda x: money(x) for c in df.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in df.columns}),hide_index=True,use_container_width=True)
-        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_3_3.csv','text/csv')
+        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_3_4.csv','text/csv')
     files=st.file_uploader('Instructor: combine student exports here',type=['csv'],accept_multiple_files=True)
     loaded=[]
     for file in files or []:
@@ -310,7 +335,7 @@ with tabs[6]:
     st.markdown('''- Illustrative rents, costs, zoning capacity, subsidies, and AMI baseline; **not current DC facts or official limits**.
 - Gross rent → less vacancy/bad debt → less operating expenses → NOI → NOI / cap rate.
 - A grant is permanent cash capital. A public land discount reduces the cost basis in this exercise, but uses a valuable public asset.
-- A repayable public loan supplies capital and requires annual payments. Its payments do not reduce NOI or capitalized unlevered property value. The app reports public-only DSCR, not total DSCR.
+- A repayable public loan supplies capital and requires annual payments. Its payments do not reduce NOI or capitalized unlevered property value. The app reports both public-only and total DSCR.
 - Required economic margin compares unlevered stabilized value plus grants against land-adjusted development cost plus a classroom return buffer. It is **not an investor IRR, developer fee, financing commitment, tax-credit model, or debt-sizing exercise**.
 - Increasing units assumes scalable costs; real zoning, parcels, land value, site constraints, infrastructure and entitlement approvals can prevent that outcome.
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.

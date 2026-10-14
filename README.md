@@ -1,11 +1,14 @@
-# DC Housing Lab v1.3.3 — Capital Stack Visualization
+# DC Housing Lab v1.3.4 — Annual operating cash-flow waterfall
 
-This is a drop-in upgrade to v1.3.2. It adds a sources-and-uses stacked bar diagram, a detailed capital sources table, and CSV export under **Build a project**.
+Drop-in upgrade from v1.3.3. Adds `cash_flow.py` and an annual operating waterfall beneath the capital stack in **Build a project**. Existing capital stack, scenarios, widgets, calculations and CSV exports retained.
 
-## Deployment
-Extract the ZIP. In your GitHub repository, upload the CONTENTS of the `DC_Housing_Lab_v1.3.3` folder to repository root and commit to your Streamlit-connected branch. Keep `.streamlit/config.toml` if already present. Run `python -m unittest discover -s tests -v` to repeat QC. Then open the Streamlit Cloud URL and verify **v1.3.3**, the capital stack and its download button. To roll back, revert the GitHub commit.
+## Deploy
+Upload **all files and folders** from this ZIP to the root of the existing GitHub repository, including the new `cash_flow.py`. Commit to the connected branch and verify the hosted app shows **v1.3.4**. Revert the commit to roll back. Do not delete existing modules still imported by `app.py`.
 
-## Visualization methodology
-Uses = net development cost after the hypothetical public land discount. Available capital sources = cash grants + public loans + supportable modeled private permanent debt + entered committed equity. An unfunded amount appears in red. If available capital exceeds uses, the excess is explicitly disclosed (it is not profit), and the bar shows all available sources. Requested private debt above supportable capacity is excluded. All values use the same dollar scale. The capital stack is not a schedule of funding draws, lender approval, construction financing, or IRR analysis.
+## Validate
+Run `python -m unittest discover -s tests -v`. In the hosted app: (1) verify the waterfall reconciles to NOI and debt service; (2) increase the public loan and observe higher payment and lower post-debt cash; (3) test zero debt and zero equity; (4) download waterfall CSV; (5) test density bonus and capital stack controls.
 
-Inputs are hypothetical educational assumptions, not verified Washington, DC market values or official AMI limits.
+## Financial logic
+Gross scheduled rent less modeled vacancy/collections = effective gross income. Less modeled operating expenses = NOI. NOI less annual public and private amortizing debt service = cash flow before reserves, capex and taxes. Cash-on-cash uses **full required equity**, even if not yet committed; an explicit warning flags missing equity. A funded/signed capital stack or a positive cash-on-cash value is not a distribution guarantee. All figures are hypothetical and annual (not a discounted cash-flow forecast).
+
+This release contains only current code and consolidated current-release documentation. Historical fixes remain in Git history.
