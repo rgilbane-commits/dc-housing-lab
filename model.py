@@ -18,6 +18,8 @@ class Inputs:
     loan_years: int = 30
     return_margin_pct: float = 10.0
     extra_parking_per_unit: int = 0
+    private_debt_m: float = 30.0
+    committed_equity_m: float = 15.0
 
 NEIGHBORHOODS = {
     'Friendship Heights / Ward 3': {'market_rent': 3900, 'cost_per_unit': 590000, 'density': 160, 'tagline': 'Higher illustrative rents and land/development costs; transit access.'},
@@ -42,7 +44,7 @@ def annuity_payment(principal, rate_pct, years):
 def analyze(p: Inputs) -> dict:
     if not 1 <= p.units <= 2000 or not 0 <= p.affordable_pct <= 100:
         raise ValueError('Invalid units or affordable share')
-    if any(v < 0 for v in [p.market_rent,p.affordable_rent,p.cost_per_unit,p.grant_m,p.land_credit_m,p.loan_m,p.extra_parking_per_unit,p.return_margin_pct]):
+    if any(v < 0 for v in [p.market_rent,p.affordable_rent,p.cost_per_unit,p.grant_m,p.land_credit_m,p.loan_m,p.extra_parking_per_unit,p.return_margin_pct,p.private_debt_m,p.committed_equity_m]):
         raise ValueError('Negative input')
     if not 0 <= p.vacancy_pct < 100 or not 0 <= p.opex_pct < 100 or p.cap_rate_pct <= 0:
         raise ValueError('Invalid operating assumptions')
@@ -57,19 +59,24 @@ def analyze(p: Inputs) -> dict:
     grant = p.grant_m*1e6
     loan = p.loan_m*1e6
     loan_ds = annuity_payment(loan,p.loan_rate_pct,p.loan_years)
-    residual_noi = noi-loan_ds
-    residual_value = residual_noi/(p.cap_rate_pct/100)
-    gap = net_cost-grant-residual_value
-    required_proceeds = net_cost*(1+p.return_margin_pct/100)
-    margin_gap = required_proceeds-grant-residual_value
-    ds_coverage = noi/loan_ds if loan_ds else None
+    # Unlevered value is independent of the capital stack. Public debt service
+    # MUST NEVER be subtracted from NOI before capitalization.
+    economic_gap = net_cost*(1+p.return_margin_pct/100) - grant - value
+    gap = net_cost-grant-value
+    private_debt=p.private_debt_m*1e6
+    committed_equity=p.committed_equity_m*1e6
+    capital_gap=net_cost-grant-loan-private_debt-committed_equity
+    coverage=noi/loan_ds if loan_ds else None
     return {**asdict(p),'restricted_units':restricted,'market_units':p.units-restricted,
         'gross_rent':gross,'egi':egi,'noi':noi,'stabilized_value':value,'gross_cost':gross_cost,
         'land_credit':land_credit,'net_cost':net_cost,'grant':grant,'loan':loan,
-        'annual_public_loan_payment':loan_ds,'residual_noi':residual_noi,'residual_value':residual_value,
-        'basic_gap':gap,'margin_gap':margin_gap,'ds_coverage':ds_coverage,
-        'capital_stack_gap':net_cost-grant-loan-max(0,residual_value),
-        'meets_simple_test':margin_gap<=0 and residual_noi>0,
+        'annual_public_loan_payment':loan_ds,'residual_noi':noi-loan_ds,
+        'residual_value':value, # legacy alias: unlevered, do not present as after-debt value
+        'basic_gap':gap,'margin_gap':economic_gap,'economic_gap':economic_gap,
+        'ds_coverage':coverage,'public_loan_dscr':coverage,
+        'private_debt':private_debt,'committed_equity':committed_equity,
+        'capital_stack_gap':capital_gap,
+        'meets_simple_test':economic_gap<=0,
         'grant_per_restricted_home':grant/restricted if restricted else None}
 
 def neighborhood_inputs(name, scenario='Balanced mixed-income'):

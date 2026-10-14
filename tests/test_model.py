@@ -10,12 +10,12 @@ class ModelTest(unittest.TestCase):
     def test_grant_reduces_gap_dollar_for_dollar(self):
         a=analyze(Inputs(grant_m=0));b=analyze(Inputs(grant_m=10));self.assertAlmostEqual(a['margin_gap']-b['margin_gap'],10e6)
     def test_loan_is_not_grant(self):
-        a=analyze(Inputs(loan_m=0));b=analyze(Inputs(loan_m=10));self.assertGreater(b['margin_gap'],a['margin_gap']);self.assertAlmostEqual(b['grant'],a['grant'])
+        a=analyze(Inputs(loan_m=0));b=analyze(Inputs(loan_m=10));self.assertAlmostEqual(b['margin_gap'],a['margin_gap']);self.assertAlmostEqual(b['grant'],a['grant']);self.assertAlmostEqual(a['capital_stack_gap']-b['capital_stack_gap'],10e6)
     def test_zero_interest_loan(self):self.assertAlmostEqual(annuity_payment(30e6,0,30),1e6)
     def test_land_cost_limited(self):
         r=analyze(Inputs(units=1,cost_per_unit=300000,land_credit_m=50));self.assertEqual(r['net_cost'],0)
     def test_no_income_loan(self):
-        r=analyze(Inputs(loan_m=50,affordable_pct=100,affordable_rent=500));self.assertFalse(r['meets_simple_test'])
+        r=analyze(Inputs(loan_m=50,affordable_pct=100,affordable_rent=500));self.assertLess(r['public_loan_dscr'],1)
     def test_neighborhoods(self):
         for n in NEIGHBORHOODS:self.assertGreater(analyze(neighborhood_inputs(n))['gross_cost'],0)
     def test_income_budgets(self):

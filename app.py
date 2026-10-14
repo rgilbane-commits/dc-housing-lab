@@ -10,7 +10,7 @@ from upgrade import SHOCKS, shock, sensitivity, minimum_grant_to_margin, snapsho
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.3 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.caption('CLASSROOM EDITION v1.3.1 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -41,6 +41,10 @@ def apply_shock():
     st.session_state['latest_shock']=st.session_state['shock_choice']
 
 if 'x_units' not in st.session_state: load(st.session_state.neighborhood,st.session_state.scenario)
+# Backfill new fields for users whose Streamlit session was created on v1.3.
+for field in Inputs.__dataclass_fields__:
+    if 'x_'+field not in st.session_state:
+        st.session_state['x_'+field]=getattr(Inputs(),field)
 if 'baseline_values' not in st.session_state:
     st.session_state.baseline_values=neighborhood_inputs(st.session_state.neighborhood,st.session_state.scenario)
 
@@ -76,6 +80,8 @@ with st.sidebar.expander('Advanced financial assumptions'):
     st.slider('Public loan term (years)',10,40,step=5,key='x_loan_years')
     st.slider('Required value-over-cost margin (%)',0.0,25.0,step=1.0,key='x_return_margin_pct')
     st.slider('Incremental parking cost per apartment ($)',0,50000,step=5000,key='x_extra_parking_per_unit')
+    st.slider('Illustrative committed private debt ($M)',0.0,100.0,step=1.0,key='x_private_debt_m')
+    st.slider('Illustrative committed equity ($M)',0.0,100.0,step=1.0,key='x_committed_equity_m')
 
 p=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
 r=analyze(p)
@@ -85,7 +91,7 @@ tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy l
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
-    a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Gap to required margin',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
+    a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Economic margin gap',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
     st.caption(f"Restricted share: {percentage(100*r['restricted_units']/r['units'], 1)} of all homes; market-rate share: {percentage(100*r['market_units']/r['units'], 1)}.")
     st.markdown('### See your housing mix')
     st.markdown('''<style>.building{background:#eef4f7;border-radius:14px;padding:20px;margin:8px 0 18px;color:#20364a}.legend{display:flex;gap:20px;font-size:14px;font-weight:650;margin-bottom:12px}.legend span:first-child{color:#087f8c}.legend span:last-child{color:#52677c}.windows{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px;max-width:720px}.apt{display:block;height:18px;border-radius:3px}.apt.aff{background:#087f8c}.apt.mkt{background:#8ca8ba}.building .caption{font-size:12px;color:#334b5e;margin-top:10px}</style>''',unsafe_allow_html=True)
@@ -103,13 +109,23 @@ with tabs[0]:
 with tabs[1]:
     st.subheader('Live project economics')
     a,b,c,d=st.columns(4)
-    a.metric('Annual NOI',fm(r['noi']));b.metric('Stabilized value',fm(r['stabilized_value']));c.metric('Net development cost',fm(r['net_cost']));d.metric('Value after public-loan payments',fm(r['residual_value']))
-    st.caption('The after-loan value is a classroom proxy: it capitalizes NOI net of annual loan repayment at the same cap rate; it is not a full debt/equity valuation.')
-    plot=pd.DataFrame({'Millions ($)':{'Net project cost':r['net_cost']/1e6,'Capitalized NOI after public-loan service + grant':(r['residual_value']+r['grant'])/1e6,'Target (cost + required margin)':r['net_cost']*(1+p.return_margin_pct/100)/1e6}})
+    a.metric('Annual NOI',fm(r['noi']));b.metric('Stabilized value',fm(r['stabilized_value']));c.metric('Net development cost',fm(r['net_cost']));d.metric('Capital funding gap',fm(r['capital_stack_gap']))
+    st.caption('Property value capitalizes unlevered NOI before debt service. Economic margin gap and capital funding gap are different tests. Negative gaps indicate surpluses.')
+    st.markdown('### Grant vs. repayable loan: same upfront dollars, different economics')
+    demo_m=st.slider('Compare equal grant and public loan amounts ($M)',0,30,10,5,key='grant_loan_demo')
+    from dataclasses import replace as _replace
+    grant_case=analyze(_replace(p,grant_m=p.grant_m+demo_m,loan_m=p.loan_m))
+    loan_case=analyze(_replace(p,grant_m=p.grant_m,loan_m=p.loan_m+demo_m))
+    demo=pd.DataFrame([{'Case':'Additional grant','Upfront public capital ($)':demo_m*1e6,'Economic margin gap ($)':grant_case['economic_gap'],'Capital funding gap ($)':grant_case['capital_stack_gap'],'Annual public-loan payment ($)':grant_case['annual_public_loan_payment']},{'Case':'Additional loan','Upfront public capital ($)':demo_m*1e6,'Economic margin gap ($)':loan_case['economic_gap'],'Capital funding gap ($)':loan_case['capital_stack_gap'],'Annual public-loan payment ($)':loan_case['annual_public_loan_payment']}])
+    st.dataframe(demo.style.format({c:lambda v: money(v) for c in demo.columns if '($)' in c}),hide_index=True,use_container_width=True)
+    st.caption('Scenarios add funding to the currently selected base case. Both supply upfront capital; only the loan requires repayment. No private-debt interest costs, covenant restrictions or grant eligibility tests are modeled.')
+    plot=pd.DataFrame({'Millions ($)':{'Net project cost':r['net_cost']/1e6,'Unlevered stabilized value + grant':(r['stabilized_value']+r['grant'])/1e6,'Target (cost + required margin)':r['net_cost']*(1+p.return_margin_pct/100)/1e6}})
     st.bar_chart(plot,horizontal=True)
-    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Basic gap before return margin',r['basic_gap']),('Gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
-    if r['residual_noi']<=0:st.error('Public loan payment consumes all modeled NOI. This loan is not supportable under the simplified test.')
-    st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private construction and permanent loans are not modeled.')
+    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Illustrative private debt commitments',r['private_debt']),('Illustrative equity commitments',r['committed_equity']),('Capital funding gap (sources less uses)',r['capital_stack_gap']),('Economic gap before margin',r['basic_gap']),('Economic gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
+    if r['residual_noi']<=0:st.error('Public loan payment consumes all modeled NOI; public-only DSCR is below 1.0x.')
+    if r['public_loan_dscr'] is not None: st.metric('Public loan DSCR (excludes private debt)',f"{r['public_loan_dscr']:.2f}×")
+    st.info('Capital gap = net development cost − grants − public loan proceeds − illustrative committed private debt − illustrative committed equity. Positive indicates unfilled funding; negative indicates excess identified sources. Total debt service coverage cannot be tested until private debt terms are entered.')
+    st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private debt and equity commitments are illustrative sources, not sized from actual lender or investor commitments. Private debt service and total DSCR are not modeled.')
 
 with tabs[2]:
     st.subheader('Three public policy levers')
@@ -130,13 +146,13 @@ with tabs[2]:
     st.divider()
     st.markdown('#### What if the city offers a loan instead?')
     st.write(f"Current public loan: **{fm(r['loan'])}**; annual payment: **{fm(r['annual_public_loan_payment'])}**. Loan coverage from total NOI: **{r['ds_coverage']:.2f}×**." if r['ds_coverage'] is not None else 'No repayable public loan selected.')
-    st.caption('Loan proceeds are not added to grant proceeds for the valuation-based feasibility test. The loan payment reduces residual NOI; loan principal cannot also be deducted from value without double counting.')
+    st.caption('Loan proceeds reduce the capital funding gap. The economic margin gap uses unlevered property value and is unchanged by a repayable loan. Annual public-loan payments are reported separately; total debt service is not modeled.')
     st.markdown('#### Compare neighborhood baselines (illustrative)')
     rows=[]
     for name in NEIGHBORHOODS:
         x=analyze(neighborhood_inputs(name,scenario))
-        rows.append({'Neighborhood':name,'Homes':x['units'],'Restricted':x['restricted_units'],'Market rent ($/mo)':x['market_rent'],'Cost per home ($)':x['cost_per_unit'],'Gap to margin ($M)':round(x['margin_gap']/1e6,1)})
-    st.dataframe(pd.DataFrame(rows).style.format({'Homes':'{:,.0f}','Restricted':'{:,.0f}','Market rent ($/mo)':lambda x:money(x),'Cost per home ($)':lambda x:money(x),'Gap to margin ($M)':lambda x: money(x*1e6,compact=True)}),hide_index=True,use_container_width=True)
+        rows.append({'Neighborhood':name,'Homes':x['units'],'Restricted':x['restricted_units'],'Market rent ($/mo)':x['market_rent'],'Cost per home ($)':x['cost_per_unit'],'Economic margin gap ($M)':round(x['margin_gap']/1e6,1)})
+    st.dataframe(pd.DataFrame(rows).style.format({'Homes':'{:,.0f}','Restricted':'{:,.0f}','Market rent ($/mo)':lambda x:money(x),'Cost per home ($)':lambda x:money(x),'Economic margin gap ($M)':lambda x: money(x*1e6,compact=True)}),hide_index=True,use_container_width=True)
 
 with tabs[3]:
     st.subheader('What does “affordable” actually mean?')
@@ -171,18 +187,18 @@ with tabs[4]:
     if st.button('Save proposal',type='primary'):
         if not team.strip():st.error('Enter your team name first.')
         else:
-            st.session_state.saved.append({'Team':team.strip()[:40],'Neighborhood':place,'Priority':priority,'Homes':p.units,'Restricted homes':r['restricted_units'],'Restricted rent ($)':p.affordable_rent,'Grant ($M)':p.grant_m,'Land credit ($M)':p.land_credit_m,'Loan ($M)':p.loan_m,'Margin gap ($M)':round(r['margin_gap']/1e6,2),'Goals met':sum(goals)})
+            st.session_state.saved.append({'Team':team.strip()[:40],'Neighborhood':place,'Priority':priority,'Homes':p.units,'Restricted homes':r['restricted_units'],'Restricted rent ($)':p.affordable_rent,'Grant ($M)':p.grant_m,'Land credit ($M)':p.land_credit_m,'Loan ($M)':p.loan_m,'Economic margin gap ($M)':round(r['margin_gap']/1e6,2),'Goals met':sum(goals)})
             st.success('Saved to this browser session. Download a CSV to retain it.')
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
         st.dataframe(df.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in df.columns if '($M)' in c}).format({c:lambda x: money(x) for c in df.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in df.columns}),hide_index=True,use_container_width=True)
-        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_2.csv','text/csv')
+        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_3_1.csv','text/csv')
     files=st.file_uploader('Instructor: combine student exports here',type=['csv'],accept_multiple_files=True)
     loaded=[]
     for file in files or []:
         try:
             x=pd.read_csv(file)
-            if {'Team','Homes','Restricted homes','Margin gap ($M)'}.issubset(x.columns):loaded.append(x)
+            if {'Team','Homes','Restricted homes','Economic margin gap ($M)'}.issubset(x.columns):loaded.append(x)
             else:st.warning(f'{file.name}: does not match proposal format')
         except Exception as exc:st.warning(f'{file.name}: could not open ({exc})')
     if loaded:
@@ -195,11 +211,11 @@ with tabs[4]:
 with tabs[5]:
     st.subheader('Stress test a development')
     st.write('Change all-in development cost and cap rates to see how the funding requirement changes.')
-    st.caption('Each table cell is the gap to the required illustrative margin. A positive number is a deficit; a negative number is a surplus. Current subsidy and loan assumptions remain fixed.')
+    st.caption('Each table cell is the unlevered economic gap to the illustrative margin; it does not depend on public loan principal. A positive number is a deficit; a negative number is a surplus. Current subsidy and loan assumptions remain fixed.')
     sensitivity_df=pd.DataFrame(sensitivity(p))
     st.dataframe(sensitivity_df.style.format({c:lambda v:money(v,compact=True) for c in sensitivity_df.columns if c!='Cost change'}),hide_index=True,use_container_width=True)
     minimum=minimum_grant_to_margin(p)
-    st.metric('Minimum total grant to satisfy modeled margin',fm(minimum))
+    st.metric('Minimum total grant to satisfy economic margin',fm(minimum))
     st.caption(f'Existing grant: {fm(r["grant"])}. Additional grant necessary: {fm(max(0,minimum-r["grant"]))}. This is a screening calculation, not a determination of subsidy eligibility.')
     st.divider()
     st.subheader('Compare two development strategies')
@@ -226,7 +242,11 @@ with tabs[5]:
 
 **AMI:** Area median income; actual income limits and allowable rents vary by program, fiscal year, and household size.
 
-**Margin gap:** A simplified value-over-cost screening threshold, not investor IRR or financing approval.
+**Economic margin gap:** Development cost × (1 + margin) minus cash grant minus unlevered asset value. It is not a capital stack shortfall or an investor IRR.
+
+**Capital funding gap:** Net development cost minus grants, public loan proceeds, illustrative private debt and committed equity. This is a sources-and-uses check, not evidence that capital is actually available.
+
+**Public-only DSCR:** NOI ÷ annual public loan debt service. Private debt obligations are not included; it is NOT total debt DSCR.
 
 **Grant vs. loan:** Grants are permanent public support; loans require repayment. A land discount carries an opportunity cost.
 
@@ -243,10 +263,10 @@ with tabs[6]:
     st.markdown('''- Illustrative rents, costs, zoning capacity, subsidies, and AMI baseline; **not current DC facts or official limits**.
 - Gross rent → less vacancy/bad debt → less operating expenses → NOI → NOI / cap rate.
 - A grant is permanent cash capital. A public land discount reduces the cost basis in this exercise, but uses a valuable public asset.
-- A repayable public loan is modeled with amortizing annual payments; capitalized residual NOI is used as a simplified proxy for its burden. Loan proceeds are **not** treated as a permanent subsidy.
-- Required margin compares residual capitalized value plus grants against land-adjusted cost plus a classroom return buffer. It is **not an investor IRR, developer fee, financing commitment, tax-credit model, or debt-sizing exercise**.
+- A repayable public loan supplies capital and requires annual payments. Its payments do not reduce NOI or capitalized unlevered property value. The app reports public-only DSCR, not total DSCR.
+- Required economic margin compares unlevered stabilized value plus grants against land-adjusted development cost plus a classroom return buffer. It is **not an investor IRR, developer fee, financing commitment, tax-credit model, or debt-sizing exercise**.
 - Increasing units assumes scalable costs; real zoning, parcels, land value, site constraints, infrastructure and entitlement approvals can prevent that outcome.
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.3 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.3.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')

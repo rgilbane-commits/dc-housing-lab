@@ -62,7 +62,7 @@ def tradeoff_messages(p: Inputs, baseline: Inputs):
     if p.grant_m != baseline.grant_m:
         result.append(f"Cash grants changed by ${(p.grant_m-baseline.grant_m)*1e6:+,.0f}; these are nonrepayable public funds in this exercise.")
     if p.loan_m != baseline.loan_m:
-        result.append(f"Repayable public loan changed by ${(p.loan_m-baseline.loan_m)*1e6:+,.0f}; its debt service is accounted for separately from grants, but private debt sizing is not modeled.")
+        result.append(f"Repayable public loan changed by ${(p.loan_m-baseline.loan_m)*1e6:+,.0f}; proceeds reduce the capital funding gap, not the unlevered economic margin gap. Public-loan debt service affects the public-only DSCR; total-debt DSCR is not modeled.")
     if p.land_credit_m != baseline.land_credit_m:
         result.append('Public land support lowers modeled cost but uses a public asset; this exercise does not price its opportunity cost independently.')
     if not result: result=['You are viewing the loaded baseline. Try increasing affordability, density, or a policy subsidy to see the consequences.']

@@ -1,30 +1,21 @@
-# DC Housing Lab v1.3 — Streamlit Classroom Edition
+# DC Housing Lab v1.3.1 — financing methodology correction
 
-Interactive Washington, DC affordable-housing classroom simulation. All location-level numbers are illustrative only.
+This release supersedes v1.3 and preserves the earlier density-bonus button hotfix and US number formatting.
 
-## New in v1.3
-- **Stress test & compare tab:** 3×3 development-cost / capitalization-rate sensitivity, minimum total grant required for the model's margin test, A/B comparison and CSV download.
-- **Reality Check sidebar:** selectable development event: construction cost increase, cap-rate increase, lower permitted density, reduced grant funding.
-- **Explain the economics:** student-facing descriptions of NOI, cap rates, AMI, margin gaps and grants versus loans.
-- **Number formatting preserved:** currencies keep signs and commas; percentages and unit quantities receive different display formats. Numerical CSV values remain numeric.
+## Deployment
+1. Extract the ZIP and upload its **contents** to the root of your existing GitHub repository, replacing matching source files, including `app.py`, `model.py`, `upgrade.py`, `classroom.py`, and `tests/`.
+2. Ensure `requirements.txt` remains in the repository root and Streamlit Cloud points to `app.py` on the deployed branch.
+3. Commit changes; open the hosted app and confirm **v1.3.1** in the heading/footer.
+4. Smoke test density bonus, public loan, grant, land contribution, Reality Check, sensitivity grid and proposals.
+5. To roll back, revert the GitHub commit and redeploy v1.3.
 
-## Cloud deployment
-1. Extract the ZIP. Upload the contents of this folder—not the ZIP itself—to the root of your existing GitHub repository.
-2. Commit `Upgrade DC Housing Lab to v1.3` on the branch used by Streamlit Community Cloud.
-3. Confirm `app.py`, `model.py`, `classroom.py`, `display_format.py`, `upgrade.py`, `requirements.txt` are at repository root.
-4. Open your Streamlit app. Verify its header shows `CLASSROOM EDITION v1.3`.
-5. Run the smoke tests in `QA_AUDIT_REPORT_v1.3.md`. For failed deployment inspect **Manage app → Logs**.
+Run tests locally with `python -m unittest discover -s tests -v` after installing `pip install -r requirements.txt`.
 
-## Run locally
-```bash
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
-```
+## Financial definitions
+- **Unlevered stabilized value** = NOI / cap rate. NOI is BEFORE all debt service.
+- **Economic margin gap** = development cost after modeled public land contribution × (1 + illustrative return-margin percentage) − cash grants − stabilized unlevered value. This is a *value-over-cost screen*, not investor IRR or capital stack gap.
+- **Capital funding gap** = development cost after public land credit − grants − public loan proceeds − illustrative private debt commitments − illustrative equity commitments. Positive is an unfunded amount and negative is excess modeled funding sources. Assumed private capital is not verified/underwritten.
+- **Public-only debt service coverage** = NOI / modeled annual public loan payment, when a public loan exists. It is NOT total DSCR, because private debt service is not modeled. Public-loan repayment schedules are simplified level annual payments.
+- A public loan does not automatically fix the economic feasibility screen; a grant improves both the margin screen and funding gap.
 
-## Automated QA
-```bash
-python -m unittest discover -s tests -v
-```
-
-## Model caution
-The screening metric capitalizes NOI after modeled public-loan payments, then compares property value plus grant support against cost plus a classroom margin. This is not conventional lender sizing, underwriting, AMI/rent limit certification, IRR or an entitlement determination. All affordability and DC neighborhood assumptions are hypothetical.
+The cost, rents, neighborhood assumptions, incomes, proposed financing, and cap rates are hypothetical and should not be used as factual DC market data or live underwriting. No database or external data access required. Student submissions are CSV-based.
