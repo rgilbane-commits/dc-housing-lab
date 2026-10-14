@@ -56,3 +56,12 @@ For backup, retain the `DC_Housing_Lab_v1.0_Deploy.zip` independently.
 - **Expanded QC:** 20 Python unit tests and static interface-contract inspection. See `QA_AUDIT_REPORT.md` for results and limitations.
 
 **Operating caution:** Runtime installation and live browser smoke testing were unavailable in the authoring environment due to network restrictions. Deployment requires a connected Streamlit host and a final smoke test. The public app URL does not exist until you deploy it.
+
+## v1.2.2 display-formatting maintenance release
+
+- `display_format.py` centralizes display of dollars, negative amounts, percentages and whole-home counts.
+- Detailed financial, household, neighborhood, and classroom comparison tables show dollar symbols and comma separators, with readable million-scale amounts.
+- Underlying model outputs and CSV exports remain numeric and unchanged.
+- The density bonus, land and grant callbacks from v1.2.1 are preserved.
+- Run `python -m unittest discover -s tests -v` for the full suite (28 tests).
+- See `FORMATTING_QA_v1.2.2.md` for results and residual browser-testing limitations.

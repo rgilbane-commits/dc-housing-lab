@@ -4,11 +4,12 @@ import pandas as pd
 import streamlit as st
 from model import Inputs, NEIGHBORHOODS, PRESETS, analyze, neighborhood_inputs, income_examples
 from classroom import HOUSEHOLDS, household_results, building_html, tradeoff_messages
+from display_format import money, percentage, integer
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.2.1 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.caption('CLASSROOM EDITION v1.2.2 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'neighborhood' not in st.session_state: st.session_state.neighborhood=list(NEIGHBORHOODS)[0]
@@ -65,13 +66,14 @@ with st.sidebar.expander('Advanced financial assumptions'):
 
 p=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
 r=analyze(p)
-fm=lambda x:f'${abs(x)/1e6:,.1f}M' if abs(x)>=1e6 else f'${abs(x):,.0f}'
+fm=lambda x:money(x, compact=True)
 
 tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📖 Model & teaching notes'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
-    a.metric('Homes',r['units']); b.metric('Restricted homes',r['restricted_units']);c.metric('Public grant',fm(r['grant']));d.metric('Gap to required margin',fm(r['margin_gap']) if r['margin_gap']>0 else 'None')
+    a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Gap to required margin',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
+    st.caption(f"Restricted share: {percentage(100*r['restricted_units']/r['units'], 1)} of all homes; market-rate share: {percentage(100*r['market_units']/r['units'], 1)}.")
     st.markdown('### See your housing mix')
     st.markdown('''<style>.building{background:#eef4f7;border-radius:14px;padding:20px;margin:8px 0 18px;color:#20364a}.legend{display:flex;gap:20px;font-size:14px;font-weight:650;margin-bottom:12px}.legend span:first-child{color:#087f8c}.legend span:last-child{color:#52677c}.windows{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px;max-width:720px}.apt{display:block;height:18px;border-radius:3px}.apt.aff{background:#087f8c}.apt.mkt{background:#8ca8ba}.building .caption{font-size:12px;color:#334b5e;margin-top:10px}</style>''',unsafe_allow_html=True)
     st.markdown(building_html(r['units'],r['restricted_units']),unsafe_allow_html=True)
@@ -92,7 +94,7 @@ with tabs[1]:
     st.caption('The after-loan value is a classroom proxy: it capitalizes NOI net of annual loan repayment at the same cap rate; it is not a full debt/equity valuation.')
     plot=pd.DataFrame({'Millions ($)':{'Net project cost':r['net_cost']/1e6,'Capitalized NOI after public-loan service + grant':(r['residual_value']+r['grant'])/1e6,'Target (cost + required margin)':r['net_cost']*(1+p.return_margin_pct/100)/1e6}})
     st.bar_chart(plot,horizontal=True)
-    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Basic gap before return margin',r['basic_gap']),('Gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']),hide_index=True,use_container_width=True)
+    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Basic gap before return margin',r['basic_gap']),('Gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
     if r['residual_noi']<=0:st.error('Public loan payment consumes all modeled NOI. This loan is not supportable under the simplified test.')
     st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private construction and permanent loans are not modeled.')
 
@@ -121,7 +123,7 @@ with tabs[2]:
     for name in NEIGHBORHOODS:
         x=analyze(neighborhood_inputs(name,scenario))
         rows.append({'Neighborhood':name,'Homes':x['units'],'Restricted':x['restricted_units'],'Market rent ($/mo)':x['market_rent'],'Cost per home ($)':x['cost_per_unit'],'Gap to margin ($M)':round(x['margin_gap']/1e6,1)})
-    st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
+    st.dataframe(pd.DataFrame(rows).style.format({'Homes':'{:,.0f}','Restricted':'{:,.0f}','Market rent ($/mo)':lambda x:money(x),'Cost per home ($)':lambda x:money(x),'Gap to margin ($M)':lambda x: money(x*1e6,compact=True)}),hide_index=True,use_container_width=True)
 
 with tabs[3]:
     st.subheader('What does “affordable” actually mean?')
@@ -131,12 +133,13 @@ with tabs[3]:
     rows=[]
     for x in income_examples(assumed_ami):
         rows.append({'Income tier':x['label'],'Gross annual income ($)':round(x['income']),'30% monthly housing budget ($)':round(x['rent_budget']),'Affordable model rent within budget?':'Yes' if p.affordable_rent<=x['rent_budget'] else 'No'})
-    st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
+    st.dataframe(pd.DataFrame(rows).style.format({'Gross annual income ($)':lambda x: money(x), '30% monthly housing budget ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
     st.metric('Modeled restricted rent',f'${p.affordable_rent:,}/month')
     st.markdown('### Four households: could they live here?')
     utility=st.slider('Estimated monthly utilities paid by tenant ($)',0,400,150,25,key='utilities')
     profiles=household_results(p,utility_allowance=utility)
-    st.dataframe(pd.DataFrame(profiles).drop(columns=['Story']),hide_index=True,use_container_width=True)
+    profile_df=pd.DataFrame(profiles).drop(columns=['Story'])
+    st.dataframe(profile_df.style.format({c: (lambda x: money(x)) for c in profile_df.columns if '($' in c}).format({'Household size':'{:,.0f}'}),hide_index=True,use_container_width=True)
     st.caption('All household incomes are fictional examples, not typical wages or verified occupation-level pay in DC. The budget is 30% of gross income INCLUDING the illustrated utility allowance. Ability to pay is not the same as eligibility or availability.')
     affordable_count=sum(x['Can afford restricted rent?']=='Yes' for x in profiles)
     st.info(f'{affordable_count} of 4 illustrative households can afford the modeled restricted rent under these assumptions. A Yes does not indicate they qualify for a restricted apartment.')
@@ -159,7 +162,7 @@ with tabs[4]:
             st.success('Saved to this browser session. Download a CSV to retain it.')
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
-        st.dataframe(df,hide_index=True,use_container_width=True)
+        st.dataframe(df.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in df.columns if '($M)' in c}).format({c:lambda x: money(x) for c in df.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in df.columns}),hide_index=True,use_container_width=True)
         st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_2.csv','text/csv')
     files=st.file_uploader('Instructor: combine student exports here',type=['csv'],accept_multiple_files=True)
     loaded=[]
@@ -171,7 +174,7 @@ with tabs[4]:
         except Exception as exc:st.warning(f'{file.name}: could not open ({exc})')
     if loaded:
         combined=pd.concat(([pd.DataFrame(st.session_state.saved)] if st.session_state.saved else [])+loaded,ignore_index=True)
-        st.dataframe(combined,hide_index=True,use_container_width=True)
+        st.dataframe(combined.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in combined.columns if '($M)' in c}).format({c:lambda x:money(x) for c in combined.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in combined.columns}),hide_index=True,use_container_width=True)
         st.bar_chart(combined.set_index('Team')[['Homes','Restricted homes']])
         st.download_button('Download combined class results',combined.to_csv(index=False),'class_results.csv','text/csv')
     st.caption('No live multi-user synchronization or database. Student files must be shared with the instructor for aggregation.')
@@ -193,4 +196,4 @@ with tabs[5]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.2.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.2.2 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
