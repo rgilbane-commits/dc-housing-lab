@@ -9,11 +9,13 @@ from upgrade import SHOCKS, shock, sensitivity, minimum_grant_to_margin, snapsho
 from capital_stack import breakdown, visual
 from cash_flow import annual_waterfall, waterfall_html
 from visuals import CSS, building_massing, finance_stack, waterfall_chart
+from neighborhood_map import render_map, nearest_neighborhood
+from student_report import create_student_pdf
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.4 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
+st.caption('CLASSROOM EDITION v1.5 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -43,6 +45,12 @@ def apply_shock():
         st.session_state['x_'+field]=getattr(after,field)
     st.session_state['latest_shock']=st.session_state['shock_choice']
 
+# Map interactions set a pending choice, applied BEFORE the sidebar selectbox is created.
+if st.session_state.get('pending_map_neighborhood'):
+    new_place=st.session_state.pop('pending_map_neighborhood')
+    st.session_state['neighborhood']=new_place
+    load(new_place,st.session_state.scenario)
+    st.session_state.baseline_values=neighborhood_inputs(new_place,st.session_state.scenario)
 if 'x_units' not in st.session_state: load(st.session_state.neighborhood,st.session_state.scenario)
 # Backfill new fields for users whose Streamlit session was created on v1.3.
 for field in Inputs.__dataclass_fields__:
@@ -96,7 +104,17 @@ p=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
 r=analyze(p)
 fm=lambda x:money(x, compact=True)
 
-presentation=st.toggle('Presentation mode · focus on three decisions',value=False,key='presentation_mode')
+presentation=st.toggle('Presentation mode · projector layout',value=False,key='presentation_mode')
+if presentation:
+    st.markdown("""<style>
+      section[data-testid="stSidebar"]{display:none!important}
+      [data-testid="stAppViewContainer"] .main .block-container{max-width:1500px!important;padding-top:1rem!important}
+      div[data-testid="stTabs"] button[role="tab"]{font-size:1.06rem!important}
+      .hero-v14{padding:12px 22px!important}
+      .hero-v14 h1{font-size:2.65rem!important}
+      [data-testid="stMetricValue"]{font-size:2.1rem!important}
+    </style>""",unsafe_allow_html=True)
+    st.caption('Projector tip: press F11 in your browser for true full-screen; toggle this switch off to restore inputs.')
 tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
@@ -200,6 +218,15 @@ with tabs[1]:
     st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private debt and equity commitments are illustrative sources, not sized from actual lender or investor commitments. Private loan DSCR, LTV and LTC limits are illustrative; they do not represent a lender commitment.')
 
 with tabs[2]:
+    st.subheader('Explore DC neighborhoods on the map')
+    st.caption('Click one of the neighborhood markers to load its illustrative development baseline. Map points represent approximate neighborhood centers, not parcel locations. Map tiles require internet access.')
+    map_event=render_map(place)
+    clicked=nearest_neighborhood((map_event or {}).get('last_object_clicked'))
+    if clicked and clicked != place:
+        st.session_state['pending_map_neighborhood']=clicked
+        st.rerun()
+    st.caption('The map is geographic context only. Rents, costs, density and zoning assumptions are educational scenarios, NOT verified neighborhood-level market or zoning data.')
+    st.divider()
     st.subheader('Three public policy levers')
     st.write('Use the sidebar to change each intervention, or use the buttons below to apply the policies directly.')
     x,y,z=st.columns(3)
@@ -256,6 +283,10 @@ with tabs[4]:
         st.write(('✅ ' if passed else '⬜ ')+label)
     team=st.text_input('Team name',placeholder='Team Metro')
     priority=st.selectbox('Most important policy outcome',['More homes','Deeper affordability','Lower public cost','Financial feasibility','Balanced access'])
+    st.download_button('Download one-page project summary (PDF)',
+        data=create_student_pdf(team.strip()[:40] or 'Unassigned',place,priority,p,r),
+        file_name='dc_housing_lab_student_proposal.pdf',mime='application/pdf',
+        use_container_width=True)
     if st.button('Save proposal',type='primary'):
         if not team.strip():st.error('Enter your team name first.')
         else:
@@ -264,7 +295,7 @@ with tabs[4]:
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
         st.dataframe(df.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in df.columns if '($M)' in c}).format({c:lambda x: money(x) for c in df.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in df.columns}),hide_index=True,use_container_width=True)
-        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_4.csv','text/csv')
+        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_5.csv','text/csv')
     files=st.file_uploader('Instructor: combine student exports here',type=['csv'],accept_multiple_files=True)
     loaded=[]
     for file in files or []:
@@ -345,4 +376,4 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.4 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.5 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
