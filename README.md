@@ -1,67 +1,30 @@
-# v1.2.1 HOTFIX
+# DC Housing Lab v1.3 — Streamlit Classroom Edition
 
-See `HOTFIX_v1.2.1.md` for the density bonus fix, regression tests, and deployment steps.
+Interactive Washington, DC affordable-housing classroom simulation. All location-level numbers are illustrative only.
 
-# DC Housing Lab v1.2 — Sidwell Friends Classroom Edition
+## New in v1.3
+- **Stress test & compare tab:** 3×3 development-cost / capitalization-rate sensitivity, minimum total grant required for the model's margin test, A/B comparison and CSV download.
+- **Reality Check sidebar:** selectable development event: construction cost increase, cap-rate increase, lower permitted density, reduced grant funding.
+- **Explain the economics:** student-facing descriptions of NOI, cap rates, AMI, margin gaps and grants versus loans.
+- **Number formatting preserved:** currencies keep signs and commas; percentages and unit quantities receive different display formats. Numerical CSV values remain numeric.
 
-**For October 14, 2026.** This is an interactive Streamlit teaching app, not an actual DC development feasibility study. All neighborhood rent/cost/density inputs are **hypothetical**, not measured or verified zoning entitlements. AMI figure is an **editable classroom illustration, not the official HUD income limit**.
-
-## Cloud deployment (Streamlit Community Cloud)
-
-1. Extract the ZIP. Create a new GitHub repository (e.g., `dc-housing-lab`).
-2. Upload the **contents** of the `DC_Housing_Lab_v1.2` folder so `app.py`, `model.py`, and `requirements.txt` are in the repository root. Keep `.streamlit/config.toml` if desired.
-3. Log in at https://share.streamlit.io, select **Create app** / deploy from GitHub, select repository/branch, and set main-file path to **`app.py`**.
-4. Open the generated public `*.streamlit.app` URL from a second device, test a slider and save/download proposal.
-5. In class, students open the same public URL and use separate sessions. Each team **downloads its CSV**, sends it to the instructor, and the instructor uploads exports on the Classroom Challenge tab. There is **no shared live database**.
-
-If upgrading an existing v1.0 GitHub deployment, **commit the v1.2 files to the same repo** (after downloading/saving a v1.0 backup); the app should redeploy automatically. To keep both versions live, use a separate v1.2 repository/deployment.
+## Cloud deployment
+1. Extract the ZIP. Upload the contents of this folder—not the ZIP itself—to the root of your existing GitHub repository.
+2. Commit `Upgrade DC Housing Lab to v1.3` on the branch used by Streamlit Community Cloud.
+3. Confirm `app.py`, `model.py`, `classroom.py`, `display_format.py`, `upgrade.py`, `requirements.txt` are at repository root.
+4. Open your Streamlit app. Verify its header shows `CLASSROOM EDITION v1.3`.
+5. Run the smoke tests in `QA_AUDIT_REPORT_v1.3.md`. For failed deployment inspect **Manage app → Logs**.
 
 ## Run locally
-
-Python 3.10+ recommended.
-
 ```bash
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Browser typically opens on `http://localhost:8501`. This is local, **not** a public URL.
-
-## Tests
-
+## Automated QA
 ```bash
 python -m unittest discover -s tests -v
-python -m py_compile app.py model.py
 ```
 
-## Release improvements
-
-- Neighborhood assumptions: illustrative Friendship Heights, Columbia Heights, Congress Heights; explicit Load button prevents changing a selector silently overriding student edits.
-- Household rent burden: income tiers 30%, 60%, 80%, 100% of **user-supplied hypothetical AMI**, with rent equal to 30% of gross income.
-- Government choices: a 25% density bonus, a $10M land contribution, or a $10M grant. Separate repayable loan slider with annual amortizing payments.
-- Classroom challenge, CSV collection, and instructor summary. No login, synced leaderboard, data collection service, or database.
-- Explicit return-margin requirement and public-loan payments in simplified valuation. Not a real equity IRR or loan underwriting.
-
-## Cautions
-
-The app **does not** include land-use entitlements, tax credits, private debt, construction draws, financing fees, actual rent schedules, utility allowances, operating subsidies, actual site valuations, or current DC market comparables. The 'return margin' is a classroom capital-adequacy buffer, not an investor return or developer profit. Any negative residual NOI is flagged. Project feasibility shown is illustrative only.
-
-For backup, retain the `DC_Housing_Lab_v1.0_Deploy.zip` independently.
-
-## v1.2 classroom enhancements
-
-- **Building visualization:** instructor view shows a responsive, color-coded unit-mix diagram. The display is capped at 100 tiles; tiles represent percentages, NOT individual apartment layouts or an actual building elevation. A separate text label reports exact unit counts.
-- **Household stories:** four fictional household profiles, gross income, household size, housing budget, adjustable assumed utility allowance, and ability-to-pay comparisons to restricted and market rent. Income does not imply HUD eligibility.
-- **Trade-off explanations:** model-calculated differences relative to the explicitly loaded neighborhood/scenario baseline; reports changes in affordable units, NOI, cost, grant and loan assumptions, and gap.
-- **Expanded QC:** 20 Python unit tests and static interface-contract inspection. See `QA_AUDIT_REPORT.md` for results and limitations.
-
-**Operating caution:** Runtime installation and live browser smoke testing were unavailable in the authoring environment due to network restrictions. Deployment requires a connected Streamlit host and a final smoke test. The public app URL does not exist until you deploy it.
-
-## v1.2.2 display-formatting maintenance release
-
-- `display_format.py` centralizes display of dollars, negative amounts, percentages and whole-home counts.
-- Detailed financial, household, neighborhood, and classroom comparison tables show dollar symbols and comma separators, with readable million-scale amounts.
-- Underlying model outputs and CSV exports remain numeric and unchanged.
-- The density bonus, land and grant callbacks from v1.2.1 are preserved.
-- Run `python -m unittest discover -s tests -v` for the full suite (28 tests).
-- See `FORMATTING_QA_v1.2.2.md` for results and residual browser-testing limitations.
+## Model caution
+The screening metric capitalizes NOI after modeled public-loan payments, then compares property value plus grant support against cost plus a classroom margin. This is not conventional lender sizing, underwriting, AMI/rent limit certification, IRR or an entitlement determination. All affordability and DC neighborhood assumptions are hypothetical.

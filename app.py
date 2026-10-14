@@ -5,13 +5,15 @@ import streamlit as st
 from model import Inputs, NEIGHBORHOODS, PRESETS, analyze, neighborhood_inputs, income_examples
 from classroom import HOUSEHOLDS, household_results, building_html, tradeoff_messages
 from display_format import money, percentage, integer
+from upgrade import SHOCKS, shock, sensitivity, minimum_grant_to_margin, snapshot
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.2.2 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.caption('CLASSROOM EDITION v1.3 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
+if 'comparison' not in st.session_state: st.session_state.comparison={}
 if 'neighborhood' not in st.session_state: st.session_state.neighborhood=list(NEIGHBORHOODS)[0]
 if 'scenario' not in st.session_state: st.session_state.scenario=list(PRESETS)[0]
 
@@ -31,6 +33,13 @@ def apply_land_contribution():
 def apply_grant():
     st.session_state['x_grant_m'] = min(100.0, st.session_state['x_grant_m'] + 10.0)
 
+def apply_shock():
+    current=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
+    after=shock(current,st.session_state['shock_choice'])
+    for field in Inputs.__dataclass_fields__:
+        st.session_state['x_'+field]=getattr(after,field)
+    st.session_state['latest_shock']=st.session_state['shock_choice']
+
 if 'x_units' not in st.session_state: load(st.session_state.neighborhood,st.session_state.scenario)
 if 'baseline_values' not in st.session_state:
     st.session_state.baseline_values=neighborhood_inputs(st.session_state.neighborhood,st.session_state.scenario)
@@ -45,6 +54,10 @@ if st.sidebar.button('↻ Load selected neighborhood and scenario',use_container
     st.rerun()
 st.sidebar.caption('Changing selections alone preserves your custom inputs. Click Load to apply a different starting case.')
 
+st.sidebar.subheader('Reality Check')
+st.sidebar.selectbox('Unexpected development event',list(SHOCKS),key='shock_choice')
+st.sidebar.button('Apply Reality Check',on_click=apply_shock,use_container_width=True)
+if 'latest_shock' in st.session_state:st.sidebar.caption('Last applied: '+st.session_state['latest_shock'])
 st.sidebar.subheader('1 · Housing program')
 st.sidebar.slider('Apartments',50,500,step=10,key='x_units')
 st.sidebar.slider('Affordable / restricted units (%)',0,100,step=5,key='x_affordable_pct')
@@ -68,7 +81,7 @@ p=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
 r=analyze(p)
 fm=lambda x:money(x, compact=True)
 
-tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📖 Model & teaching notes'])
+tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
@@ -180,6 +193,46 @@ with tabs[4]:
     st.caption('No live multi-user synchronization or database. Student files must be shared with the instructor for aggregation.')
 
 with tabs[5]:
+    st.subheader('Stress test a development')
+    st.write('Change all-in development cost and cap rates to see how the funding requirement changes.')
+    st.caption('Each table cell is the gap to the required illustrative margin. A positive number is a deficit; a negative number is a surplus. Current subsidy and loan assumptions remain fixed.')
+    sensitivity_df=pd.DataFrame(sensitivity(p))
+    st.dataframe(sensitivity_df.style.format({c:lambda v:money(v,compact=True) for c in sensitivity_df.columns if c!='Cost change'}),hide_index=True,use_container_width=True)
+    minimum=minimum_grant_to_margin(p)
+    st.metric('Minimum total grant to satisfy modeled margin',fm(minimum))
+    st.caption(f'Existing grant: {fm(r["grant"])}. Additional grant necessary: {fm(max(0,minimum-r["grant"]))}. This is a screening calculation, not a determination of subsidy eligibility.')
+    st.divider()
+    st.subheader('Compare two development strategies')
+    left,right=st.columns(2)
+    with left:
+        if st.button('Save current design as A',use_container_width=True):
+            st.session_state.comparison['A']=snapshot(p,'Scenario A')
+            st.success('Saved A in this browser session.')
+    with right:
+        if st.button('Save current design as B',use_container_width=True):
+            st.session_state.comparison['B']=snapshot(p,'Scenario B')
+            st.success('Saved B in this browser session.')
+    if st.session_state.comparison:
+        comparison_df=pd.DataFrame([{k:v for k,v in item.items() if k!='inputs'} for item in st.session_state.comparison.values()])
+        fmt={c:(lambda v:money(v,compact=True) if pd.notna(v) else 'N/A') for c in comparison_df.columns if '($)' in c}
+        fmt.update({'Affordable share (%)':lambda v:percentage(v,1),'Affordable homes':'{:,.0f}','Homes':'{:,.0f}'})
+        st.dataframe(comparison_df.style.format(fmt),hide_index=True,use_container_width=True)
+        st.download_button('Download comparison CSV',comparison_df.to_csv(index=False),'dc_housing_lab_comparison.csv','text/csv')
+    st.caption('Saved scenarios are local to this browser session; no shared student database is used.')
+    with st.expander('Explain the economics',expanded=True):
+        st.markdown("""**NOI:** Rent less vacancy and operating expenses, before debt and income taxes.
+
+**Cap rate:** NOI divided by property value; a higher rate reduces implied value at equal NOI.
+
+**AMI:** Area median income; actual income limits and allowable rents vary by program, fiscal year, and household size.
+
+**Margin gap:** A simplified value-over-cost screening threshold, not investor IRR or financing approval.
+
+**Grant vs. loan:** Grants are permanent public support; loans require repayment. A land discount carries an opportunity cost.
+
+**Sensitivity:** Each cell recalculates the same model with independent cap-rate and cost changes.""")
+
+with tabs[6]:
     st.subheader('Teaching plan: 60 minutes')
     st.markdown('''**0–10:** Who gets access to good neighborhoods? Discuss housing, schools, jobs, and transit.  
 **10–20:** Pick Friendship Heights versus Congress Heights. Why can both be hard to build in?  
@@ -196,4 +249,4 @@ with tabs[5]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.2.2 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.3 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
