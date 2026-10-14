@@ -1,78 +1,54 @@
-# DC Housing Lab — Classroom Edition v1.0
+# DC Housing Lab v1.2 — Sidwell Friends Classroom Edition
 
-An interactive Streamlit classroom app for affordable housing, urban planning, and the economics of development. Designed for an October 14, 2026 class at Sidwell Friends School, Washington, DC.
+**For October 14, 2026.** This is an interactive Streamlit teaching app, not an actual DC development feasibility study. All neighborhood rent/cost/density inputs are **hypothetical**, not measured or verified zoning entitlements. AMI figure is an **editable classroom illustration, not the official HUD income limit**.
 
-## Quick deploy (Streamlit Community Cloud)
+## Cloud deployment (Streamlit Community Cloud)
 
-1. Unzip this folder. Create a **new GitHub repository** (public for Streamlit Community Cloud free-tier deployment). Upload **all contents** including `app.py`, `model.py`, `requirements.txt`, and `.streamlit/config.toml` **at the repository root**. The `tests/` folder is optional for deployment but recommended to retain.
-2. Sign in at https://share.streamlit.io/ with GitHub. Choose **Create app** → **Yup, I have an app**.
-3. Select your repository, branch `main`, and **main file path `app.py`**. Choose Python 3.12 in Advanced settings if desired. Click **Deploy**.
-4. Open the generated `https://...streamlit.app` URL on a laptop or phone. **Test it from an incognito window** before sharing with the class.
+1. Extract the ZIP. Create a new GitHub repository (e.g., `dc-housing-lab`).
+2. Upload the **contents** of the `DC_Housing_Lab_v1.2` folder so `app.py`, `model.py`, and `requirements.txt` are in the repository root. Keep `.streamlit/config.toml` if desired.
+3. Log in at https://share.streamlit.io, select **Create app** / deploy from GitHub, select repository/branch, and set main-file path to **`app.py`**.
+4. Open the generated public `*.streamlit.app` URL from a second device, test a slider and save/download proposal.
+5. In class, students open the same public URL and use separate sessions. Each team **downloads its CSV**, sends it to the instructor, and the instructor uploads exports on the Classroom Challenge tab. There is **no shared live database**.
 
-> Streamlit manages hosting; this ZIP by itself is not a publicly accessible site. Deployment needs your GitHub / Streamlit account. Exact interface labels may evolve.
-
-Official deployment documentation: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy
+If upgrading an existing v1.0 GitHub deployment, **commit the v1.2 files to the same repo** (after downloading/saving a v1.0 backup); the app should redeploy automatically. To keep both versions live, use a separate v1.2 repository/deployment.
 
 ## Run locally
 
+Python 3.10+ recommended.
+
 ```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
 ```
 
-Open the local browser URL that Streamlit prints (usually http://localhost:8501). To run tests: `python -m unittest discover -s tests -v`.
+Browser typically opens on `http://localhost:8501`. This is local, **not** a public URL.
 
-## Teaching quickstart
+## Tests
 
-1. On the **Today’s challenge** tab, introduce the three goals: ≥200 apartments; ≥60 income-restricted homes; funding gap ≤0.
-2. In the sidebar, change income-restricted percentage from 30% to 100%. Talk about how value and funding gap shift.
-3. Ask students to create their own proposal. Use the **Compare proposals** tab to save/export a CSV, then upload students' exports on the instructor's computer.
-4. Discuss why a positive stabilized-value test is not evidence of an executable capital stack, and why 'income-restricted' does not necessarily mean affordable to every low-income household.
-
-## What actually works
-
-- Interactive density, rents, cost, subsidy, land, parking, and underwriting sliders.
-- Recomputed unit counts, NOI, stabilized value, funding gap, cash subsidy requirement.
-- Policy presets and discussion prompts.
-- Session-local student proposals, exportable CSVs, and instructor CSV aggregation.
-- Teaching guide and clearly labeled simplified assumptions.
-
-## Limitations (disclose to students)
-
-- **Not network-synchronized.** Each browser has its own independent session. The instructor manually imports CSV exports to compare proposals. No database, authentication, or persistent classroom leaderboard.
-- **Not actual DC underwriting.** Default rent/cost/subsidy/cap assumptions are fictional, not verified market data. Model excludes loan sizing, debt costs, bond financing, project schedule, tax credits, tax abatements, reserves, developer fees, and tiered AMI rules.
-- **No automatic live data feed.** For real-world data, add jurisdiction-specific rent restrictions, subsidy programs, and current underwriting evidence separately.
-- **Value is not financeable proceeds.** Funding-gap proxy compares stabilized asset value and public support against net development cost; it is intentionally simplistic.
-- **Land credits are economic support.** They reduce modeled net development cost and are distinguished from a cash subsidy.
-
-## Model math
-
-- Affordable homes = rounded(total homes × affordable percent).
-- Gross annual rent = 12 × (market homes × market rent + restricted homes × restricted rent).
-- Effective rent = gross rent × (1 − vacancy and collection loss).
-- NOI = effective rent × (1 − operating expense ratio).
-- Stabilized value = NOI / capitalization rate.
-- Net cost = base development cost + incremental parking cost − land credit.
-- Funding gap = net cost − value − public capital subsidy.
-
-## Troubleshooting
-
-- **Module not found:** Verify `requirements.txt` at repository root and inspect Streamlit app logs.
-- **Blank app:** Check logs for Python errors; verify entrypoint `app.py`.
-- **Sliders appear unchanged after selecting preset:** Click **Load scenario / reset sliders** in sidebar.
-- **Students can't see instructor results:** Expected — use CSV export/import workflow.
-- **App sleeps while idle:** Streamlit may put an unused free-tier app to sleep; open and test ahead of class.
-
-## Project layout
-
+```bash
+python -m unittest discover -s tests -v
+python -m py_compile app.py model.py
 ```
-app.py                    Streamlit UI
-model.py                  Pure Python financial calculations
-requirements.txt          Cloud dependencies
-.streamlit/config.toml    Theme and server settings
-README.md                 Setup and limitations
-tests/test_model.py       Math checks
-```
+
+## Release improvements
+
+- Neighborhood assumptions: illustrative Friendship Heights, Columbia Heights, Congress Heights; explicit Load button prevents changing a selector silently overriding student edits.
+- Household rent burden: income tiers 30%, 60%, 80%, 100% of **user-supplied hypothetical AMI**, with rent equal to 30% of gross income.
+- Government choices: a 25% density bonus, a $10M land contribution, or a $10M grant. Separate repayable loan slider with annual amortizing payments.
+- Classroom challenge, CSV collection, and instructor summary. No login, synced leaderboard, data collection service, or database.
+- Explicit return-margin requirement and public-loan payments in simplified valuation. Not a real equity IRR or loan underwriting.
+
+## Cautions
+
+The app **does not** include land-use entitlements, tax credits, private debt, construction draws, financing fees, actual rent schedules, utility allowances, operating subsidies, actual site valuations, or current DC market comparables. The 'return margin' is a classroom capital-adequacy buffer, not an investor return or developer profit. Any negative residual NOI is flagged. Project feasibility shown is illustrative only.
+
+For backup, retain the `DC_Housing_Lab_v1.0_Deploy.zip` independently.
+
+## v1.2 classroom enhancements
+
+- **Building visualization:** instructor view shows a responsive, color-coded unit-mix diagram. The display is capped at 100 tiles; tiles represent percentages, NOT individual apartment layouts or an actual building elevation. A separate text label reports exact unit counts.
+- **Household stories:** four fictional household profiles, gross income, household size, housing budget, adjustable assumed utility allowance, and ability-to-pay comparisons to restricted and market rent. Income does not imply HUD eligibility.
+- **Trade-off explanations:** model-calculated differences relative to the explicitly loaded neighborhood/scenario baseline; reports changes in affordable units, NOI, cost, grant and loan assumptions, and gap.
+- **Expanded QC:** 20 Python unit tests and static interface-contract inspection. See `QA_AUDIT_REPORT.md` for results and limitations.
+
+**Operating caution:** Runtime installation and live browser smoke testing were unavailable in the authoring environment due to network restrictions. Deployment requires a connected Streamlit host and a final smoke test. The public app URL does not exist until you deploy it.
