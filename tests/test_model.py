@@ -78,5 +78,5 @@ class ClassroomQA(unittest.TestCase):
     def test_source_contains_all_tabs_and_safety_copy(self):
         from pathlib import Path
         app=Path(__file__).resolve().parents[1].joinpath('app.py').read_text()
-        for marker in ['Instructor view','Build a project','Policy lab','Who can afford it?','Classroom challenge','building_html(', 'household_results(', 'tradeoff_messages(','hypothetical']:
+        for marker in ['Instructor view','Build a project','Policy lab','Who can afford it?','Classroom challenge','building_massing(', 'household_results(', 'tradeoff_messages(','illustrative']:
             self.assertIn(marker,app)

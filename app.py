@@ -8,11 +8,12 @@ from display_format import money, percentage, integer
 from upgrade import SHOCKS, shock, sensitivity, minimum_grant_to_margin, snapshot
 from capital_stack import breakdown, visual
 from cash_flow import annual_waterfall, waterfall_html
+from visuals import CSS, building_massing, finance_stack, waterfall_chart
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
-st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
-st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.3.4 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.markdown(CSS,unsafe_allow_html=True)
+st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
+st.caption('CLASSROOM EDITION v1.4 • Neighborhood and household assumptions are illustrative, not verified DC market data or official income limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -95,16 +96,19 @@ p=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
 r=analyze(p)
 fm=lambda x:money(x, compact=True)
 
+presentation=st.toggle('Presentation mode · focus on three decisions',value=False,key='presentation_mode')
 tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
     a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Economic margin gap',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
     st.caption(f"Restricted share: {percentage(100*r['restricted_units']/r['units'], 1)} of all homes; market-rate share: {percentage(100*r['market_units']/r['units'], 1)}.")
-    st.markdown('### See your housing mix')
-    st.markdown('''<style>.building{background:#eef4f7;border-radius:14px;padding:20px;margin:8px 0 18px;color:#20364a}.legend{display:flex;gap:20px;font-size:14px;font-weight:650;margin-bottom:12px}.legend span:first-child{color:#087f8c}.legend span:last-child{color:#52677c}.windows{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px;max-width:720px}.apt{display:block;height:18px;border-radius:3px}.apt.aff{background:#087f8c}.apt.mkt{background:#8ca8ba}.building .caption{font-size:12px;color:#334b5e;margin-top:10px}</style>''',unsafe_allow_html=True)
-    st.markdown(building_html(r['units'],r['restricted_units']),unsafe_allow_html=True)
-    st.caption('A stylized representation of unit mix only—not actual height, floor area, zoning, or a building design.')
+    st.markdown(building_massing(r['units'],r['restricted_units']),unsafe_allow_html=True)
+    if presentation:
+        st.markdown('### Can we finance and operate it?')
+        st.markdown(finance_stack(breakdown(r),lambda v:money(v,compact=True)),unsafe_allow_html=True)
+        st.markdown(waterfall_chart(annual_waterfall(r),lambda v:money(v,compact=True)),unsafe_allow_html=True)
+        st.caption('Projection mode simplifies the presentation; technical detail remains in Build a project.')
     st.markdown('### What changed and why?')
     for message in tradeoff_messages(p,st.session_state.baseline_values):st.info(message)
     st.markdown('### Three quick experiments')
@@ -118,7 +122,7 @@ with tabs[1]:
     st.subheader('Live project economics')
     st.markdown('### Sources & uses | capital stack')
     stack=breakdown(r)
-    st.markdown(visual(r,lambda v:money(v,compact=True)),unsafe_allow_html=True)
+    st.markdown(finance_stack(stack,lambda v:money(v,compact=True)),unsafe_allow_html=True)
     f1,f2,f3=st.columns(3)
     f1.metric('Net development uses',fm(stack['cost']))
     f2.metric('Identified funding sources',fm(stack['available_total']))
@@ -134,7 +138,7 @@ with tabs[1]:
     st.markdown('### Annual operating cash-flow waterfall')
     st.caption('Illustrative **stabilized annual** operations at the current rent and operating assumptions. This is one representative year, not a multi-year cash-flow forecast.')
     cf=annual_waterfall(r)
-    st.markdown(waterfall_html(cf,lambda v:money(v,compact=True)),unsafe_allow_html=True)
+    st.markdown(waterfall_chart(cf,lambda v:money(v,compact=True)),unsafe_allow_html=True)
     wc1,wc2,wc3,wc4=st.columns(4)
     wc1.metric('Annual NOI (before debt)',fm(cf['noi']))
     wc2.metric('Total annual debt service',fm(cf['total_ds']))
@@ -260,7 +264,7 @@ with tabs[4]:
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
         st.dataframe(df.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in df.columns if '($M)' in c}).format({c:lambda x: money(x) for c in df.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in df.columns}),hide_index=True,use_container_width=True)
-        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_3_4.csv','text/csv')
+        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_4.csv','text/csv')
     files=st.file_uploader('Instructor: combine student exports here',type=['csv'],accept_multiple_files=True)
     loaded=[]
     for file in files or []:
@@ -341,4 +345,4 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.3.3 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.4 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')

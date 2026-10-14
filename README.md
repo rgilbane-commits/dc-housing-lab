@@ -1,14 +1,12 @@
-# DC Housing Lab v1.3.4 — Annual operating cash-flow waterfall
+# DC Housing Lab v1.4 — Visual Upgrade
 
-Drop-in upgrade from v1.3.3. Adds `cash_flow.py` and an annual operating waterfall beneath the capital stack in **Build a project**. Existing capital stack, scenarios, widgets, calculations and CSV exports retained.
+Upgrade from v1.3.4. Streamlit app with improved responsive styling, conceptual building massing, reconciled sources-and-uses bars, a floating cash-flow waterfall, and a presentation-mode toggle. No model formulas were changed.
 
 ## Deploy
-Upload **all files and folders** from this ZIP to the root of the existing GitHub repository, including the new `cash_flow.py`. Commit to the connected branch and verify the hosted app shows **v1.3.4**. Revert the commit to roll back. Do not delete existing modules still imported by `app.py`.
+Upload the **contents** of this folder to the GitHub repository root, replacing existing files and adding `visuals.py`. Ensure `app.py`, `model.py`, `classroom.py`, `capital_stack.py`, `cash_flow.py`, `upgrade.py`, `display_format.py`, `visuals.py`, and `requirements.txt` are present. Streamlit Community Cloud entrypoint: `app.py`.
 
-## Validate
-Run `python -m unittest discover -s tests -v`. In the hosted app: (1) verify the waterfall reconciles to NOI and debt service; (2) increase the public loan and observe higher payment and lower post-debt cash; (3) test zero debt and zero equity; (4) download waterfall CSV; (5) test density bonus and capital stack controls.
+## Run locally
+`pip install -r requirements.txt` then `streamlit run app.py`. Run regression tests with `python -m unittest discover -s tests -v`.
 
-## Financial logic
-Gross scheduled rent less modeled vacancy/collections = effective gross income. Less modeled operating expenses = NOI. NOI less annual public and private amortizing debt service = cash flow before reserves, capex and taxes. Cash-on-cash uses **full required equity**, even if not yet committed; an explicit warning flags missing equity. A funded/signed capital stack or a positive cash-on-cash value is not a distribution guarantee. All figures are hypothetical and annual (not a discounted cash-flow forecast).
-
-This release contains only current code and consolidated current-release documentation. Historical fixes remain in Git history.
+## Important assumptions
+Building floors assume 20 units per floor purely for illustration and are not zoning-compliant massing. App finances and household incomes are hypothetical. Charts use the existing calculation outputs; the sources bar omits unused commitments and shows remaining equity. The waterfall is a single stabilized representative year.
