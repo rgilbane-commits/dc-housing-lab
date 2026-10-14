@@ -6,11 +6,12 @@ from model import Inputs, NEIGHBORHOODS, PRESETS, analyze, neighborhood_inputs, 
 from classroom import HOUSEHOLDS, household_results, building_html, tradeoff_messages
 from display_format import money, percentage, integer
 from upgrade import SHOCKS, shock, sensitivity, minimum_grant_to_margin, snapshot
+from capital_stack import breakdown, visual
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown('''<style>.block-container{max-width:1320px;padding-top:1.5rem}.hero{background:linear-gradient(110deg,#10283f,#176e80);border-radius:17px;padding:22px 28px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2.3rem;margin:0}.hero p{color:#dcecf1;margin:4px 0}div[data-testid="stMetric"]{background:#f2f5f8;padding:13px;border-radius:11px}</style>''',unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🏙️ DC Housing Lab</h1><p>Who gets to live in the city? A real-time housing development and policy simulator.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.3.1 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
+st.caption('CLASSROOM EDITION v1.3.3 • All neighborhood financial inputs and AMI amounts are hypothetical teaching assumptions, NOT current market data or official rent limits.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -81,6 +82,12 @@ with st.sidebar.expander('Advanced financial assumptions'):
     st.slider('Required value-over-cost margin (%)',0.0,25.0,step=1.0,key='x_return_margin_pct')
     st.slider('Incremental parking cost per apartment ($)',0,50000,step=5000,key='x_extra_parking_per_unit')
     st.slider('Illustrative committed private debt ($M)',0.0,100.0,step=1.0,key='x_private_debt_m')
+    st.markdown('**Private permanent loan sizing**')
+    st.slider('Private loan interest rate (%)',0.0,12.0,step=0.25,key='x_private_rate_pct')
+    st.slider('Private loan amortization (years)',10,40,step=5,key='x_private_amort_years')
+    st.slider('Minimum total DSCR (×)',1.0,2.0,step=0.05,key='x_min_total_dscr')
+    st.slider('Maximum private loan LTV (%)',0.0,85.0,step=5.0,key='x_max_private_ltv_pct')
+    st.slider('Maximum private loan LTC (%)',0.0,90.0,step=5.0,key='x_max_private_ltc_pct')
     st.slider('Illustrative committed equity ($M)',0.0,100.0,step=1.0,key='x_committed_equity_m')
 
 p=Inputs(**{f:st.session_state['x_'+f] for f in Inputs.__dataclass_fields__})
@@ -108,6 +115,42 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader('Live project economics')
+    st.markdown('### Sources & uses | capital stack')
+    stack=breakdown(r)
+    st.markdown(visual(r,lambda v:money(v,compact=True)),unsafe_allow_html=True)
+    f1,f2,f3=st.columns(3)
+    f1.metric('Net development uses',fm(stack['cost']))
+    f2.metric('Identified funding sources',fm(stack['available_total']))
+    f3.metric('Additional equity needed',fm(stack['shortfall']))
+    st.caption('Includes only the supportable private loan actually modeled, not the requested loan above lender limits. Red indicates the remaining amount to be raised. Bars use the same dollar scale.')
+    if stack['unused_sources']>0.01:
+        st.warning(f"Identified sources exceed uses by {fm(stack['unused_sources'])}. This is excess proposed funding, not profit. The sources bar includes that excess.")
+    source_table=pd.DataFrame([{'Capital source':label,'Available ($)':amount,'Applied to uses ($)':dict(stack['allocated']).get(label,0.0)} for label,amount in stack['sources']] + [{'Capital source':'Additional equity required','Available ($)':0.0,'Applied to uses ($)':stack['shortfall']}])
+    st.dataframe(source_table.style.format({'Available ($)':money,'Applied to uses ($)':money}),hide_index=True,use_container_width=True)
+    csv_export=source_table.to_csv(index=False).encode('utf-8')
+    st.download_button('Download capital stack (CSV)',data=csv_export,file_name='dc_housing_lab_capital_stack.csv',mime='text/csv',key='download_capital_stack')
+    st.caption('Sources-and-uses is a funding check, not an appraisal or investment return. The land contribution reduces net project cost. Private loans are subject to the simplified debt-capacity tests; public loans are assumed available but must be repaid. Overfunded sources are disclosed, not interpreted as equity profits.')
+    st.markdown('### Private permanent loan and required equity')
+    k1,k2,k3,k4=st.columns(4)
+    k1.metric('Maximum supportable private loan',fm(r['private_debt_capacity']))
+    k2.metric('Modeled private loan used',fm(r['funded_private_debt']))
+    k3.metric('Required equity',fm(r['equity_required']))
+    k4.metric('Total DSCR',f"{r['total_dscr']:.2f}×" if r['total_dscr'] is not None else 'N/A')
+    st.caption('Private borrowing = lower of entered commitment and the most restrictive DSCR, LTV and LTC limits. All public debt payments are included in total DSCR. No modeled debt means DSCR is N/A.')
+    limits=pd.DataFrame([
+        {'Sizing constraint':'Total DSCR','Maximum private debt ($)':r['private_debt_by_dscr']},
+        {'Sizing constraint':'Loan-to-value (LTV)','Maximum private debt ($)':r['private_debt_by_ltv']},
+        {'Sizing constraint':'Loan-to-cost (LTC)','Maximum private debt ($)':r['private_debt_by_ltc']},
+        {'Sizing constraint':'Requested private debt','Maximum private debt ($)':r['private_debt']}])
+    st.dataframe(limits.style.format({'Maximum private debt ($)':money}),hide_index=True,use_container_width=True)
+    if r['private_debt_shortfall']>0.01:
+        st.warning(f"Entered private debt exceeds sizing capacity by {fm(r['private_debt_shortfall'])}. Binding limit(s): {r['binding_private_limits']}.")
+    if r['additional_equity_needed']>0.01:
+        st.error(f"Additional equity needed beyond entered commitment: {fm(r['additional_equity_needed'])}.")
+    else: st.success('Entered equity commitment covers the simplified remaining equity requirement.')
+    if r['total_annual_debt_service']>0 and r['total_dscr']<p.min_total_dscr-1e-9:
+        st.error('Total debt service does not meet the selected minimum coverage; the public loan alone may exceed debt-service capacity.')
+    st.caption('Private-loan proceeds are modeled at the entered commitment up to supportable capacity. Real lenders also test reserves, cash flow, loan maturity, guarantees, and other restrictions.')
     a,b,c,d=st.columns(4)
     a.metric('Annual NOI',fm(r['noi']));b.metric('Stabilized value',fm(r['stabilized_value']));c.metric('Net development cost',fm(r['net_cost']));d.metric('Capital funding gap',fm(r['capital_stack_gap']))
     st.caption('Property value capitalizes unlevered NOI before debt service. Economic margin gap and capital funding gap are different tests. Negative gaps indicate surpluses.')
@@ -121,11 +164,11 @@ with tabs[1]:
     st.caption('Scenarios add funding to the currently selected base case. Both supply upfront capital; only the loan requires repayment. No private-debt interest costs, covenant restrictions or grant eligibility tests are modeled.')
     plot=pd.DataFrame({'Millions ($)':{'Net project cost':r['net_cost']/1e6,'Unlevered stabilized value + grant':(r['stabilized_value']+r['grant'])/1e6,'Target (cost + required margin)':r['net_cost']*(1+p.return_margin_pct/100)/1e6}})
     st.bar_chart(plot,horizontal=True)
-    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Illustrative private debt commitments',r['private_debt']),('Illustrative equity commitments',r['committed_equity']),('Capital funding gap (sources less uses)',r['capital_stack_gap']),('Economic gap before margin',r['basic_gap']),('Economic gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
+    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Requested private loan',r['private_debt']),('Supportable private loan used',r['funded_private_debt']),('Private debt service / year',r['private_annual_debt_service']),('Total public + private debt service / year',r['total_annual_debt_service']),('Equity required after supportable private loan',r['equity_required']),('Additional equity needed beyond commitment',r['additional_equity_needed']),('Illustrative equity commitments',r['committed_equity']),('Capital funding gap (sources less uses)',r['capital_stack_gap']),('Economic gap before margin',r['basic_gap']),('Economic gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
     if r['residual_noi']<=0:st.error('Public loan payment consumes all modeled NOI; public-only DSCR is below 1.0x.')
     if r['public_loan_dscr'] is not None: st.metric('Public loan DSCR (excludes private debt)',f"{r['public_loan_dscr']:.2f}×")
-    st.info('Capital gap = net development cost − grants − public loan proceeds − illustrative committed private debt − illustrative committed equity. Positive indicates unfilled funding; negative indicates excess identified sources. Total debt service coverage cannot be tested until private debt terms are entered.')
-    st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private debt and equity commitments are illustrative sources, not sized from actual lender or investor commitments. Private debt service and total DSCR are not modeled.')
+    st.info('Legacy committed-sources capital gap = net development cost − grants − public loan proceeds − illustrative committed private debt − illustrative committed equity. Positive indicates unfilled funding; negative indicates excess identified sources. The new debt sizing and equity analysis above uses supportable rather than simply entered debt.')
+    st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private debt and equity commitments are illustrative sources, not sized from actual lender or investor commitments. Private loan DSCR, LTV and LTC limits are illustrative; they do not represent a lender commitment.')
 
 with tabs[2]:
     st.subheader('Three public policy levers')
@@ -146,7 +189,7 @@ with tabs[2]:
     st.divider()
     st.markdown('#### What if the city offers a loan instead?')
     st.write(f"Current public loan: **{fm(r['loan'])}**; annual payment: **{fm(r['annual_public_loan_payment'])}**. Loan coverage from total NOI: **{r['ds_coverage']:.2f}×**." if r['ds_coverage'] is not None else 'No repayable public loan selected.')
-    st.caption('Loan proceeds reduce the capital funding gap. The economic margin gap uses unlevered property value and is unchanged by a repayable loan. Annual public-loan payments are reported separately; total debt service is not modeled.')
+    st.caption('Loan proceeds reduce the capital funding gap. The economic margin gap uses unlevered property value and is unchanged by a repayable loan. Annual public and private loan payments are included in the total DSCR shown in Build a project.')
     st.markdown('#### Compare neighborhood baselines (illustrative)')
     rows=[]
     for name in NEIGHBORHOODS:
@@ -187,12 +230,12 @@ with tabs[4]:
     if st.button('Save proposal',type='primary'):
         if not team.strip():st.error('Enter your team name first.')
         else:
-            st.session_state.saved.append({'Team':team.strip()[:40],'Neighborhood':place,'Priority':priority,'Homes':p.units,'Restricted homes':r['restricted_units'],'Restricted rent ($)':p.affordable_rent,'Grant ($M)':p.grant_m,'Land credit ($M)':p.land_credit_m,'Loan ($M)':p.loan_m,'Economic margin gap ($M)':round(r['margin_gap']/1e6,2),'Goals met':sum(goals)})
+            st.session_state.saved.append({'Team':team.strip()[:40],'Neighborhood':place,'Priority':priority,'Homes':p.units,'Restricted homes':r['restricted_units'],'Restricted rent ($)':p.affordable_rent,'Grant ($M)':p.grant_m,'Land credit ($M)':p.land_credit_m,'Loan ($M)':p.loan_m,'Economic margin gap ($M)':round(r['margin_gap']/1e6,2),'Private debt used ($M)':round(r['funded_private_debt']/1e6,2),'Required equity ($M)':round(r['equity_required']/1e6,2),'Total DSCR (x)':round(r['total_dscr'],2) if r['total_dscr'] is not None else None,'Goals met':sum(goals)})
             st.success('Saved to this browser session. Download a CSV to retain it.')
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
         st.dataframe(df.style.format({c:(lambda x:money(x*1e6,compact=True)) for c in df.columns if '($M)' in c}).format({c:lambda x: money(x) for c in df.columns if '($)' in c}).format({c:'{:,.0f}' for c in ['Homes','Restricted homes'] if c in df.columns}),hide_index=True,use_container_width=True)
-        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_3_1.csv','text/csv')
+        st.download_button('Download proposal(s) CSV',df.to_csv(index=False),'dc_housing_proposals_v1_3_3.csv','text/csv')
     files=st.file_uploader('Instructor: combine student exports here',type=['csv'],accept_multiple_files=True)
     loaded=[]
     for file in files or []:
@@ -246,7 +289,11 @@ with tabs[5]:
 
 **Capital funding gap:** Net development cost minus grants, public loan proceeds, illustrative private debt and committed equity. This is a sources-and-uses check, not evidence that capital is actually available.
 
-**Public-only DSCR:** NOI ÷ annual public loan debt service. Private debt obligations are not included; it is NOT total debt DSCR.
+**Total DSCR:** NOI ÷ (annual public debt service + annual private debt service). Public-only DSCR is shown separately and must not be mistaken for total coverage.
+
+**Debt capacity:** The minimum of DSCR-based, LTV-based and LTC-based limits. Private loan used cannot exceed the entered requested commitment.
+
+**Equity requirement:** Net development cost less grants, public loan proceeds and supportable private debt, floored at zero; compare to entered committed equity. This is a static sources-and-uses approximation, not a project IRR.
 
 **Grant vs. loan:** Grants are permanent public support; loans require repayment. A land discount carries an opportunity cost.
 
@@ -269,4 +316,4 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.3.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.3.3 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')

@@ -43,7 +43,7 @@ def snapshot(p: Inputs, title: str):
             'Affordable rent ($/mo)':p.affordable_rent,
             'Annual NOI ($)':r['noi'],'Net project cost ($)':r['net_cost'],
             'Public grant ($)':r['grant'],'Public land credit ($)':r['land_credit'],
-            'Public loan ($)':r['loan'],'Capital funding gap ($)':r['capital_stack_gap'],'Public loan DSCR (x)':r['public_loan_dscr'],'Economic margin gap ($)':r['margin_gap'],
+            'Public loan ($)':r['loan'],'Capital funding gap ($)':r['capital_stack_gap'],'Public loan DSCR (x)':r['public_loan_dscr'], 'Total DSCR (x)':r['total_dscr'], 'Supportable private debt ($)':r['private_debt_capacity'], 'Private debt used ($)':r['funded_private_debt'], 'Required equity ($)':r['equity_required'], 'Additional equity required ($)':r['additional_equity_needed'], 'Economic margin gap ($)':r['margin_gap'],
             'Public support per affordable home ($)': (r['grant']+r['land_credit'])/r['restricted_units'] if r['restricted_units'] else None,
             'Illustrative margin test': 'Pass' if r['meets_simple_test'] else 'Fail',
             'inputs':asdict(p)}

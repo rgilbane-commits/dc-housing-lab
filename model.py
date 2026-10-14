@@ -20,6 +20,11 @@ class Inputs:
     extra_parking_per_unit: int = 0
     private_debt_m: float = 30.0
     committed_equity_m: float = 15.0
+    private_rate_pct: float = 6.0
+    private_amort_years: int = 30
+    min_total_dscr: float = 1.25
+    max_private_ltv_pct: float = 65.0
+    max_private_ltc_pct: float = 70.0
 
 NEIGHBORHOODS = {
     'Friendship Heights / Ward 3': {'market_rent': 3900, 'cost_per_unit': 590000, 'density': 160, 'tagline': 'Higher illustrative rents and land/development costs; transit access.'},
@@ -44,10 +49,13 @@ def annuity_payment(principal, rate_pct, years):
 def analyze(p: Inputs) -> dict:
     if not 1 <= p.units <= 2000 or not 0 <= p.affordable_pct <= 100:
         raise ValueError('Invalid units or affordable share')
-    if any(v < 0 for v in [p.market_rent,p.affordable_rent,p.cost_per_unit,p.grant_m,p.land_credit_m,p.loan_m,p.extra_parking_per_unit,p.return_margin_pct,p.private_debt_m,p.committed_equity_m]):
+    if any(v < 0 for v in [p.market_rent,p.affordable_rent,p.cost_per_unit,p.grant_m,p.land_credit_m,p.loan_m,p.extra_parking_per_unit,p.return_margin_pct,p.private_debt_m,p.committed_equity_m,p.private_rate_pct,p.max_private_ltv_pct,p.max_private_ltc_pct]):
         raise ValueError('Negative input')
     if not 0 <= p.vacancy_pct < 100 or not 0 <= p.opex_pct < 100 or p.cap_rate_pct <= 0:
         raise ValueError('Invalid operating assumptions')
+    if not (p.private_amort_years > 0 and p.min_total_dscr >= 1 and
+            0 <= p.max_private_ltv_pct <= 100 and 0 <= p.max_private_ltc_pct <= 100):
+        raise ValueError('Invalid private loan sizing assumptions')
     restricted = round(p.units*p.affordable_pct/100)
     gross = 12*((p.units-restricted)*p.market_rent+restricted*p.affordable_rent)
     egi = gross*(1-p.vacancy_pct/100)
@@ -66,6 +74,25 @@ def analyze(p: Inputs) -> dict:
     private_debt=p.private_debt_m*1e6
     committed_equity=p.committed_equity_m*1e6
     capital_gap=net_cost-grant-loan-private_debt-committed_equity
+    # Debt capacity: conservative simplified underwriting. Public debt service
+    # shares the same NOI and is deducted BEFORE sizing any private payments.
+    private_constant=annuity_payment(1.0,p.private_rate_pct,p.private_amort_years)
+    private_by_dscr=max(0.0,(noi/p.min_total_dscr-loan_ds)/private_constant)
+    private_by_ltv=max(0.0,value*p.max_private_ltv_pct/100)
+    private_by_ltc=max(0.0,net_cost*p.max_private_ltc_pct/100)
+    private_capacity=min(private_by_dscr,private_by_ltv,private_by_ltc)
+    # Requested private loan is not assumed available above supportable capacity.
+    funded_private=min(private_debt,private_capacity)
+    private_ds=funded_private*private_constant
+    total_ds=private_ds+loan_ds
+    total_dscr=noi/total_ds if total_ds>0 else None
+    equity_required=max(0.0,net_cost-grant-loan-funded_private)
+    excess_sources=max(0.0,grant+loan+funded_private-net_cost)
+    unfunded_equity=max(0.0,equity_required-committed_equity)
+    equity_surplus=max(0.0,committed_equity-equity_required)
+    binding=[]
+    for name,amount in [('DSCR',private_by_dscr),('LTV',private_by_ltv),('LTC',private_by_ltc)]:
+        if abs(amount-private_capacity)<0.01:binding.append(name)
     coverage=noi/loan_ds if loan_ds else None
     return {**asdict(p),'restricted_units':restricted,'market_units':p.units-restricted,
         'gross_rent':gross,'egi':egi,'noi':noi,'stabilized_value':value,'gross_cost':gross_cost,
@@ -76,6 +103,15 @@ def analyze(p: Inputs) -> dict:
         'ds_coverage':coverage,'public_loan_dscr':coverage,
         'private_debt':private_debt,'committed_equity':committed_equity,
         'capital_stack_gap':capital_gap,
+        'private_debt_capacity':private_capacity,
+        'private_debt_by_dscr':private_by_dscr,'private_debt_by_ltv':private_by_ltv,
+        'private_debt_by_ltc':private_by_ltc,'binding_private_limits':', '.join(binding),
+        'funded_private_debt':funded_private,'private_debt_shortfall':private_debt-funded_private,
+        'private_annual_debt_service':private_ds,'total_annual_debt_service':total_ds,
+        'total_dscr':total_dscr,'private_loan_constant':private_constant,
+        'equity_required':equity_required,'additional_equity_needed':unfunded_equity,
+        'equity_surplus':equity_surplus,'excess_financing_sources':excess_sources,
+        'capacity_adjusted_capital_gap':net_cost-grant-loan-funded_private-committed_equity,
         'meets_simple_test':economic_gap<=0,
         'grant_per_restricted_home':grant/restricted if restricted else None}
 

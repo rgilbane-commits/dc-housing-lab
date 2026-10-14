@@ -1,21 +1,11 @@
-# DC Housing Lab v1.3.1 — financing methodology correction
+# DC Housing Lab v1.3.3 — Capital Stack Visualization
 
-This release supersedes v1.3 and preserves the earlier density-bonus button hotfix and US number formatting.
+This is a drop-in upgrade to v1.3.2. It adds a sources-and-uses stacked bar diagram, a detailed capital sources table, and CSV export under **Build a project**.
 
 ## Deployment
-1. Extract the ZIP and upload its **contents** to the root of your existing GitHub repository, replacing matching source files, including `app.py`, `model.py`, `upgrade.py`, `classroom.py`, and `tests/`.
-2. Ensure `requirements.txt` remains in the repository root and Streamlit Cloud points to `app.py` on the deployed branch.
-3. Commit changes; open the hosted app and confirm **v1.3.1** in the heading/footer.
-4. Smoke test density bonus, public loan, grant, land contribution, Reality Check, sensitivity grid and proposals.
-5. To roll back, revert the GitHub commit and redeploy v1.3.
+Extract the ZIP. In your GitHub repository, upload the CONTENTS of the `DC_Housing_Lab_v1.3.3` folder to repository root and commit to your Streamlit-connected branch. Keep `.streamlit/config.toml` if already present. Run `python -m unittest discover -s tests -v` to repeat QC. Then open the Streamlit Cloud URL and verify **v1.3.3**, the capital stack and its download button. To roll back, revert the GitHub commit.
 
-Run tests locally with `python -m unittest discover -s tests -v` after installing `pip install -r requirements.txt`.
+## Visualization methodology
+Uses = net development cost after the hypothetical public land discount. Available capital sources = cash grants + public loans + supportable modeled private permanent debt + entered committed equity. An unfunded amount appears in red. If available capital exceeds uses, the excess is explicitly disclosed (it is not profit), and the bar shows all available sources. Requested private debt above supportable capacity is excluded. All values use the same dollar scale. The capital stack is not a schedule of funding draws, lender approval, construction financing, or IRR analysis.
 
-## Financial definitions
-- **Unlevered stabilized value** = NOI / cap rate. NOI is BEFORE all debt service.
-- **Economic margin gap** = development cost after modeled public land contribution × (1 + illustrative return-margin percentage) − cash grants − stabilized unlevered value. This is a *value-over-cost screen*, not investor IRR or capital stack gap.
-- **Capital funding gap** = development cost after public land credit − grants − public loan proceeds − illustrative private debt commitments − illustrative equity commitments. Positive is an unfunded amount and negative is excess modeled funding sources. Assumed private capital is not verified/underwritten.
-- **Public-only debt service coverage** = NOI / modeled annual public loan payment, when a public loan exists. It is NOT total DSCR, because private debt service is not modeled. Public-loan repayment schedules are simplified level annual payments.
-- A public loan does not automatically fix the economic feasibility screen; a grant improves both the margin screen and funding gap.
-
-The cost, rents, neighborhood assumptions, incomes, proposed financing, and cap rates are hypothetical and should not be used as factual DC market data or live underwriting. No database or external data access required. Student submissions are CSV-based.
+Inputs are hypothetical educational assumptions, not verified Washington, DC market values or official AMI limits.
