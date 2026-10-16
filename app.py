@@ -19,6 +19,7 @@ from geo_policy import boundary_geometry, planning_map, PLANNING_LAYER
 from housing_intelligence import analyze_area, comparison_rows
 from geo_denominators import retrieve as retrieve_denominators, DenominatorUnavailable
 from investment_strategy import AREAS, STRATEGIES, SUBSIDY_PER_HOME, Line, evaluate as evaluate_investment
+from investment_feasibility import FundingAssumptions, assess_portfolio
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
@@ -578,7 +579,7 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.9 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v2.2.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
 
 with tabs[7]:
     st.subheader('Ten-year operating and affordability preservation outlook')
@@ -697,6 +698,24 @@ with tabs[9]:
             st.dataframe(df[['planning_area','strategy','allocation_m','assumed_support_per_home','illustrative_home_capacity','unassigned_fractional_budget']].rename(columns={'planning_area':'Planning area','strategy':'Strategy','allocation_m':'Allocation ($M)','assumed_support_per_home':'Assumed support/home ($)','illustrative_home_capacity':'Potential homes (illustrative)','unassigned_fractional_budget':'Remainder ($)'}).style.format({'Allocation ($M)':'${:,.1f}','Assumed support/home ($)':'${:,.0f}','Potential homes (illustrative)':'{:,.0f}','Remainder ($)':'${:,.0f}'}),use_container_width=True)
             st.download_button('Download investment allocation and assumptions (CSV)',df.to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v2_2_0_investment_allocation.csv',mime='text/csv',key='inv_export')
         st.caption('Illustrative capacity uses integer floor of allocated grant-equivalent support divided by assumed per-home contribution. No project-specific financing, operating support, environmental, zoning, or legal covenant approvals are implied.')
+        st.markdown('#### Project-level feasibility screening (new in v2.2.1)')
+        st.caption('Hypothetical archetypes use illustrative neighborhood rents/costs. Each allocation line is treated as one project; projects exceeding 2,000 homes are not screened. Screening is not an approval or delivery forecast.')
+        fc1,fc2,fc3=st.columns(3)
+        debt_pct=fc1.slider('Requested private debt (% of project cost)',0,90,55,5,key='inv_fin_debt_pct')
+        equity_pct=fc2.slider('Committed equity (% of project cost)',0,90,20,5,key='inv_fin_equity_pct')
+        reserve_pct=fc3.slider('Operating reserve allowance (% of NOI)',0,25,5,1,key='inv_fin_reserve_pct')
+        portfolio=assess_portfolio(lines, FundingAssumptions(private_debt_request_pct_of_cost=debt_pct,committed_equity_pct_of_cost=equity_pct,reserve_pct_of_noi=reserve_pct))
+        c1,c2,c3=st.columns(3)
+        c1.metric('Potential homes (not approved)',integer(portfolio['potential_homes']))
+        c2.metric('Homes passing illustrative finance screen (not approved)',integer(portfolio['screened_homes']))
+        c3.metric('Additional equity needed',money(portfolio['total_equity_shortfall'],compact=True))
+        if portfolio['projects']:
+            fin_df=pd.DataFrame(portfolio['projects'])
+            show=['planning_area','strategy','potential_homes','restricted_homes','project_cost','grant_used','equity_required','additional_equity_needed','total_dscr','financial_screen']
+            st.dataframe(fin_df[show].style.format({'potential_homes':'{:,.0f}','restricted_homes':lambda x:'N/A' if pd.isna(x) else f'{x:,.0f}','project_cost':lambda x:'N/A' if pd.isna(x) else money(x),'grant_used':money,'equity_required':lambda x:'N/A' if pd.isna(x) else money(x),'additional_equity_needed':lambda x:'N/A' if pd.isna(x) else money(x),'total_dscr':lambda x:'N/A' if pd.isna(x) else f'{x:.2f}×'}),hide_index=True,use_container_width=True)
+            st.download_button('Download project feasibility screen (CSV)',fin_df.to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v2_2_1_feasibility.csv',mime='text/csv',key='inv_fin_export')
+        st.warning('No screened homes are verified, committed, constructed, or delivered. Screening assumes no project-specific zoning, environmental, financing, covenant, or preservation transaction approval. Operating calculations are one stabilized-year proxy; reserves are illustrative.')
+
     st.markdown('#### Methodology and safeguards')
     with st.expander('What does the investment simulator measure?'):
         st.write('Per-home subsidy parameters are adjustable instructional inputs, not sourced market quotes. A result of 100 potential homes means the assumed public contribution could theoretically support that many units, subject to independent project-level feasibility tests. It does not mean those homes are funded, committed, built or preserved. Production and preservation outputs are reported separately; no false conversion between them is implied.')
