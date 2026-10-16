@@ -1,15 +1,9 @@
-# DC Housing Lab v1.9.2 — DC GIS planning-area case hotfix
+# DC Housing Lab v1.9.3 - DC GIS literal-value hotfix
 
-Upload all application `.py` files, `requirements.txt`, data CSV files, and `tests/` to the root of the existing GitHub repo. Commit to the deployed branch and refresh Streamlit.
+Fixes the Congress Heights planning-area filter to query `FAR SOUTHEAST AND SOUTHWEST`, the spelling returned by the live DC GIS service, rather than `FAR SOUTHEAST & SOUTHWEST`. The accepted result is validated against the same canonical string. No financial formulas or mappings for the other two neighborhoods were changed.
 
-## Fix
-The DC GIS `PLANNING_AREA` attribute uses uppercase values. v1.9.1 issued an exact comparison using title-case labels, causing valid planning areas to appear empty. v1.9.2 queries the uppercase values and compares response names case-insensitively. Empty-result protection remains enabled. No financial formulas were modified.
+## Deploy
+Upload the extracted files to the existing GitHub repository root, including `live_data.py` and `app.py`. Commit to the Streamlit-connected branch. Open Policy Lab > Live DC neighborhood evidence, select Congress Heights, and press Refresh public data now. A positive retrieved result must be checked against the official GIS records; an empty result should still be treated as unverified.
 
-## Validation
-Run `python -m unittest discover -s tests -p 'test*.py' -q` from the repository root. 115 tests passed in the build environment. Live DC GIS results still require hosted validation.
-
-## Smoke test
-In the app's Policy Lab, select Friendship Heights, refresh public data, and inspect Rock Creek West count and sample project records. Repeat for Columbia Heights and Congress Heights. Ensure return values and geographic labels are correct. If zero or an API error persists, capture the diagnostic message and Streamlit logs.
-
-## Scope
-These are projects started or completed since 2015 in entire DC planning areas, not current affordable unit availability or exact neighborhood inventories.
+## QA
+Run `python -m unittest discover -s tests -p 'test_*.py'` from the repository root. Tests use mocked service responses; real GIS retrieval must be checked after deployment.

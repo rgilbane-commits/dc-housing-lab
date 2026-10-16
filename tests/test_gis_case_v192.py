@@ -11,7 +11,7 @@ class GISCaseTests(unittest.TestCase):
             result=fetch_gis('Friendship Heights / Ward 3')
         self.assertEqual(result['metrics']['reported_unit_sum'],44)
     def test_other_areas_uppercase(self):
-        for neighborhood,expected in [('Columbia Heights / Ward 1','MID-CITY'),('Congress Heights / Ward 8','FAR SOUTHEAST & SOUTHWEST')]:
+        for neighborhood,expected in [('Columbia Heights / Ward 1','MID-CITY'),('Congress Heights / Ward 8','FAR SOUTHEAST AND SOUTHWEST')]:
             def fake(url,params,session=None,timeout=9):
                 self.assertIn(expected,params['where'])
                 return {'features':[{'attributes':{'OBJECTID':1,'PLANNING_AREA':expected,'TOTAL_AFFORDABLE_UNITS':10}}]}

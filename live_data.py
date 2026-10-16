@@ -16,7 +16,7 @@ GIS_FIELDS=('OBJECTID','PROJECT_NAME','PLANNING_AREA','STATUS_PUBLIC','TOTAL_AFF
 CENTERS={
  'Friendship Heights / Ward 3':(38.9593,-77.0847,'Rock Creek West'),
  'Columbia Heights / Ward 1':(38.9289,-77.0327,'Mid-City'),
- 'Congress Heights / Ward 8':(38.8437,-76.9889,'Far Southeast & Southwest')}
+ 'Congress Heights / Ward 8':(38.8437,-76.9889,'Far Southeast and Southwest')}
 
 class DataUnavailable(RuntimeError):
     pass
