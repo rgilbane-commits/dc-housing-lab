@@ -1,12 +1,13 @@
-# DC Housing Lab v2.3.2
-Full Streamlit application. Deploy by replacing matching files in the existing GitHub repository, including `geographic_visuals.py`; retain `requirements.txt` and `tests/`.
+# DC Housing Lab v2.3.3 — Presentation & Policy Reporting
 
-Navigate to **DC Housing Explorer**. Under **Geographic Housing Intelligence**, choose **Analyze all three planning areas** to populate the dashboard. Activate the official boundary map separately using its checkbox. The grouping chart shows numbers only for fully classified source datasets; empty columns are *not* zero.
+## Deploy
+Upload the contents of this ZIP to the existing Streamlit GitHub repository (not the parent folder). Preserve `requirements.txt` and all modules; new module: `policy_brief.py`. Commit and let Streamlit redeploy.
 
-## Acceptance gates
-1. Browser-load all five workspaces and run official map after fresh GIS retrieval.
-2. Check three-area chart and source completeness vs underlying live GIS records.
-3. Verify Census denominators, missing-data states, and exports.
-4. Confirm project financial and investment pages remain unchanged.
+## Use
+Visit **Presentation & Reports**. Toggle projector mode at the top for simplified classroom display (browser F11 for full screen). Download the development brief from the active project. To download the investment policy brief, first save Scenarios A and B in **Investment Strategy**; return to Presentation & Reports. Both reports are generated from the active session values.
 
-Live Streamlit/browser and network GIS tests were not run here; approve only after hosted validation.
+## Verification
+Run `python -m pytest -q tests` inside the extracted folder. Local tests verify PDF parseability and content; actual Streamlit browser interaction must be verified after deployment. Confirm PDF export matches displayed figures, especially when inputs and saved scenarios change. No independent live-browser validation has been conducted.
+
+## Limitations
+These reports are classroom decision aids; estimated homes and financing screen passes are not commitments or delivered projects. PDF data as-of is generation time, and geographic/ACS contextual estimates remain subject to previously documented qualification. Projector mode uses CSS and does not programmatically invoke browser full-screen.

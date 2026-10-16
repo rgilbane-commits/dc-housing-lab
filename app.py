@@ -11,6 +11,7 @@ from cash_flow import annual_waterfall, waterfall_html
 from visuals import CSS, building_massing, finance_stack, waterfall_chart
 from neighborhood_map import render_map, nearest_neighborhood
 from student_report import create_student_pdf
+from policy_brief import build_project_brief, build_scenario_brief
 from forecast import ForecastAssumptions, project
 from public_policy import PublicPolicyAssumptions, evaluate
 from evidence import planning_area_context, district_production, records as evidence_sources
@@ -38,7 +39,7 @@ st.markdown("""<style>
 </style>""",unsafe_allow_html=True)
 
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v2.3.2 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v2.3.3 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -183,6 +184,16 @@ with workspaces[0]:
 
 with tabs[0]:
     st.markdown('## Instructor view · Presentation & Reports')
+    st.markdown('### Presentation narrative')
+    st.caption('Use the projector toggle above to hide the editing sidebar; press F11 for browser full-screen. All figures below use the active project assumptions.')
+    st.markdown('**1 · The housing challenge** — Compare housing mix, affordability restrictions and geographic context.')
+    st.markdown('**2 · Project economics** — Review the development budget, subsidy, operating income and capital shortfall.')
+    st.markdown('**3 · The public policy decision** — Which households benefit, and what are the trade-offs?')
+    st.download_button('Download development policy brief (PDF)', data=build_project_brief(place,scenario,p,r),file_name='DC_Housing_Lab_v2_3_3_development_policy_brief.pdf',mime='application/pdf',key='v233_project_brief')
+    if st.session_state.get('inv_saved_a') and st.session_state.get('inv_saved_b'):
+        st.download_button('Download A/B investment policy brief (PDF)',data=build_scenario_brief(st.session_state['inv_saved_a'],st.session_state['inv_saved_b']),file_name='DC_Housing_Lab_v2_3_3_investment_policy_brief.pdf',mime='application/pdf',key='v233_scenario_brief')
+    else:
+        st.caption('Save investment Scenarios A and B to unlock the two-scenario policy brief.')
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
     a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Economic margin gap',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
@@ -662,7 +673,7 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v2.2.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v2.3.3 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
 
 with tabs[7]:
     st.markdown('## Ten-year outlook')
