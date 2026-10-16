@@ -20,11 +20,24 @@ from housing_intelligence import analyze_area, comparison_rows
 from geo_denominators import retrieve as retrieve_denominators, DenominatorUnavailable
 from investment_strategy import AREAS, STRATEGIES, SUBSIDY_PER_HOME, Line, evaluate as evaluate_investment
 from investment_feasibility import FundingAssumptions, assess_portfolio
+from scenario_compare import capture as capture_investment_scenario, compare as compare_investment_scenarios
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
+
+st.markdown("""<style>
+:root {--lab-navy:#18374b;--lab-teal:#087f7a;}
+[data-testid="stAppViewContainer"] .main .block-container {max-width:1440px;padding-top:1.2rem;}
+[data-testid="stTabs"] button[role="tab"] {font-weight:650;font-size:.98rem;padding:.75rem .8rem;}
+[data-testid="stTabs"] button[aria-selected="true"] {color:#087f7a;border-bottom-color:#087f7a;}
+[data-testid="stMetric"] {border:1px solid rgba(105,135,151,.22);border-radius:12px;padding:11px 13px;background:rgba(123,151,165,.06);}
+[data-testid="stMetricLabel"] {font-weight:600;}
+[data-testid="stMetricValue"] {font-variant-numeric:tabular-nums;}
+@media(max-width:850px){[data-testid="stTabs"] button[role="tab"]{font-size:.84rem;padding:.5rem .45rem;}[data-testid="stMetricValue"]{font-size:1.5rem;}}
+</style>""",unsafe_allow_html=True)
+
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v2.2.0 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v2.3.0 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -131,8 +144,44 @@ if presentation:
       [data-testid="stMetricValue"]{font-size:2.1rem!important}
     </style>""",unsafe_allow_html=True)
     st.caption('Projector tip: press F11 in your browser for true full-screen; toggle this switch off to restore inputs.')
-tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes','📈 Ten-year outlook','🏛️ Public subsidy efficiency','💼 Public investment strategy'])
+# v2.3.0 navigation: one set of five workspaces, with original views retained.
+workspaces=st.tabs(['📍 Overview','🏗️ Development Studio','🗺️ DC Housing Explorer','💼 Investment Strategy','🎓 Presentation & Reports'])
+# Legacy sections are grouped into their new workspaces; no model logic is duplicated.
+tabs=[workspaces[i] for i in [4,1,2,1,4,1,4,1,3,3]]
+with workspaces[0]:
+    st.markdown('## Executive overview')
+    st.caption('Illustrative development underwriting | Sourced DC geographic observations appear separately in DC Housing Explorer.')
+    st.markdown(f'**Selected location:** {place}  ·  **Starting scenario:** {scenario}')
+    o1,o2,o3,o4=st.columns(4)
+    o1.metric('Total homes',integer(r['units']))
+    o2.metric('Income-restricted homes',integer(r['restricted_units']))
+    o3.metric('Net development cost',fm(r['net_cost']))
+    o4.metric('Annual NOI',fm(r['noi']))
+    st.markdown('### Financial position')
+    q1,q2,q3,q4=st.columns(4)
+    q1.metric('Additional equity required',fm(r['additional_equity_needed']))
+    q2.metric('Economic margin gap',fm(r['economic_gap']))
+    q3.metric('Total debt coverage',f"{r['total_dscr']:.2f}×" if r['total_dscr'] is not None else 'N/A')
+    q4.metric('Private debt funded',fm(r['funded_private_debt']))
+    k1,k2=st.columns([1,1])
+    with k1:
+        st.markdown('#### Building program')
+        st.markdown(building_massing(r['units'],r['restricted_units']),unsafe_allow_html=True)
+    with k2:
+        st.markdown('#### Capital sources and uses')
+        st.markdown(finance_stack(breakdown(r),lambda v:money(v,compact=True)),unsafe_allow_html=True)
+    st.markdown('#### Stabilized annual cash flow')
+    st.markdown(waterfall_chart(annual_waterfall(r),lambda v:money(v,compact=True)),unsafe_allow_html=True)
+    if not r['public_loan_supported']:
+        st.error('Public loan fails the selected DSCR test. Requested loan proceeds do not establish financing viability.')
+    if r['additional_equity_needed']>0.01:
+        st.warning('Additional equity is still required. Illustrated economic results do not constitute financing commitments.')
+    if not r['meets_simple_test']:
+        st.warning('Economic margin test is not satisfied under the selected assumptions.')
+    st.caption('Overview presents modeled estimates, not observed market transactions. Values are generated from the same financial model used by Development Studio.')
+
 with tabs[0]:
+    st.markdown('## Instructor view · Presentation & Reports')
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
     a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Economic margin gap',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
@@ -157,6 +206,7 @@ with tabs[0]:
     st.info('Instructor tip: students should distinguish a public grant (permanent capital support), discounted land (foregone public value), and a repayable loan (a financial obligation).')
 
 with tabs[1]:
+    st.markdown('## Build a project · Financing and operations')
     st.subheader('Live project economics')
     st.markdown('### Sources & uses | capital stack')
     stack=breakdown(r)
@@ -238,6 +288,7 @@ with tabs[1]:
     st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private debt and equity commitments are illustrative sources, not sized from actual lender or investor commitments. Private loan DSCR, LTV and LTC limits are illustrative; they do not represent a lender commitment.')
 
 with tabs[2]:
+    st.markdown('## Policy lab · Neighborhood and geographic evidence')
     st.subheader('Explore DC neighborhoods on the map')
     st.caption('Click one of the neighborhood markers to load its illustrative development baseline. Map points represent approximate neighborhood centers, not parcel locations. Map tiles use OpenStreetMap without an API key; internet access is required.')
     map_event=None
@@ -457,6 +508,7 @@ with tabs[2]:
     st.dataframe(pd.DataFrame(rows).style.format({'Homes':'{:,.0f}','Restricted':'{:,.0f}','Market rent ($/mo)':lambda x:money(x),'Cost per home ($)':lambda x:money(x),'Economic margin gap ($M)':lambda x: money(x*1e6,compact=True)}),hide_index=True,use_container_width=True)
 
 with tabs[3]:
+    st.markdown('## Who can afford it?')
     st.subheader('What does “affordable” actually mean?')
     st.write('A restricted apartment is not necessarily affordable to every household. Compare an illustrative income level with the actual modeled rent.')
     assumed_ami=st.number_input('Hypothetical annual AMI baseline for this exercise ($, four-person household)',min_value=40000,max_value=300000,value=160000,step=5000)
@@ -478,6 +530,7 @@ with tabs[3]:
     st.markdown('**Ask students:** Who is left out when a building is restricted to households at 80% AMI, but rents are too high for families at 30% AMI?')
 
 with tabs[4]:
+    st.markdown('## Classroom challenge')
     st.subheader('10-minute housing policy challenge')
     st.write('Goal: create ≥200 homes including ≥60 restricted homes, with no modeled return-margin gap. Then defend total public support and the rents households will pay.')
     goals=[p.units>=200,r['restricted_units']>=60,r['meets_simple_test']]
@@ -515,6 +568,7 @@ with tabs[4]:
     st.caption('No live multi-user synchronization or database. Student files must be shared with the instructor for aggregation.')
 
 with tabs[5]:
+    st.markdown('## Stress test & compare')
     st.subheader('Stress test a development')
     st.write('Change all-in development cost and cap rates to see how the funding requirement changes.')
     st.caption('Each table cell is the unlevered economic gap to the illustrative margin; it does not depend on public loan principal. A positive number is a deficit; a negative number is a surplus. Current subsidy and loan assumptions remain fixed.')
@@ -563,6 +617,7 @@ with tabs[5]:
 **Sensitivity:** Each cell recalculates the same model with independent cap-rate and cost changes.""")
 
 with tabs[6]:
+    st.markdown('## Model & teaching notes')
     st.subheader('Teaching plan: 60 minutes')
     st.markdown('''**0–10:** Who gets access to good neighborhoods? Discuss housing, schools, jobs, and transit.  
 **10–20:** Pick Friendship Heights versus Congress Heights. Why can both be hard to build in?  
@@ -582,6 +637,7 @@ with tabs[6]:
 st.divider();st.caption('DC Housing Lab v2.2.1 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
 
 with tabs[7]:
+    st.markdown('## Ten-year outlook')
     st.subheader('Ten-year operating and affordability preservation outlook')
     st.caption('Starts with the stabilized operating assumptions. Market and restricted rents grow separately; operating expenses, replacement reserves and debt repayment are forecast annually. Illustrative analysis, not a regulated rent schedule or investment offering.')
     f1,f2,f3=st.columns(3)
@@ -627,6 +683,7 @@ with tabs[7]:
 
 
 with tabs[8]:
+    st.markdown('## Public subsidy efficiency')
     st.subheader('Public subsidy efficiency | Policy-maker perspective')
     st.caption('Compare upfront public outlays with the estimated present value of support. This is not a full governmental fiscal impact or cost-benefit analysis.')
     pa,pb=st.columns(2)
@@ -667,6 +724,7 @@ with tabs[8]:
         st.write('A 30-year restriction is assumed if selected; the application does not verify a legally binding agreement. Comparing programs also requires incomes served, persistence, displacement avoided, location, and quality—not just cost per unit.')
 
 with tabs[9]:
+    st.markdown('## Public investment allocation and financial screening')
     st.subheader('$100 million | Public Investment Strategy')
     st.info('Illustrative allocation simulator. All per-home public support assumptions are hypothetical. GIS and Census evidence is contextual and does not automatically determine housing yield.')
     st.caption('Amounts entered are public grants/equivalent capital support, not complete development cost. The model does not assume that a repayable loan is equivalent to a grant.')
@@ -715,6 +773,42 @@ with tabs[9]:
             st.dataframe(fin_df[show].style.format({'potential_homes':'{:,.0f}','restricted_homes':lambda x:'N/A' if pd.isna(x) else f'{x:,.0f}','project_cost':lambda x:'N/A' if pd.isna(x) else money(x),'grant_used':money,'equity_required':lambda x:'N/A' if pd.isna(x) else money(x),'additional_equity_needed':lambda x:'N/A' if pd.isna(x) else money(x),'total_dscr':lambda x:'N/A' if pd.isna(x) else f'{x:.2f}×'}),hide_index=True,use_container_width=True)
             st.download_button('Download project feasibility screen (CSV)',fin_df.to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v2_2_1_feasibility.csv',mime='text/csv',key='inv_fin_export')
         st.warning('No screened homes are verified, committed, constructed, or delivered. Screening assumes no project-specific zoning, environmental, financing, covenant, or preservation transaction approval. Operating calculations are one stabilized-year proxy; reserves are illustrative.')
+        st.markdown('#### Visual scenario comparison · v2.3.1')
+        st.caption('Save the current allocation and financing controls as Scenario A. Modify the allocation and capture Scenario B, then compare both on identical model logic. Snapshots persist during this browser session only.')
+        snapshot_name=st.text_input('Scenario label', value='Policy strategy', key='inv_compare_label')
+        sc1,sc2,sc3=st.columns(3)
+        current_controls=FundingAssumptions(private_debt_request_pct_of_cost=debt_pct,committed_equity_pct_of_cost=equity_pct,reserve_pct_of_noi=reserve_pct)
+        if sc1.button('Save as Scenario A',key='inv_compare_save_a'):
+            st.session_state['inv_saved_a']=capture_investment_scenario(snapshot_name,lines,current_controls)
+        if sc2.button('Save as Scenario B',key='inv_compare_save_b'):
+            st.session_state['inv_saved_b']=capture_investment_scenario(snapshot_name,lines,current_controls)
+        if sc3.button('Clear saved scenarios',key='inv_compare_clear'):
+            st.session_state.pop('inv_saved_a',None)
+            st.session_state.pop('inv_saved_b',None)
+        a_saved=st.session_state.get('inv_saved_a');b_saved=st.session_state.get('inv_saved_b')
+        if a_saved and b_saved:
+            comparison=compare_investment_scenarios(a_saved,b_saved)
+            a_result=comparison['baseline'];b_result=comparison['candidate']
+            st.markdown(f"**Scenario A:** {a_result['name']}  ·  **Scenario B:** {b_result['name']}")
+            score_rows=[{'Metric':'Public capital allocated ($M)','Scenario A':a_result['allocated_m'],'Scenario B':b_result['allocated_m'],'Change (B − A)':comparison['delta']['allocated_m']},
+                        {'Metric':'Unallocated capital ($M)','Scenario A':a_result['unallocated_m'],'Scenario B':b_result['unallocated_m'],'Change (B − A)':comparison['delta']['unallocated_m']},
+                        {'Metric':'Potential homes (illustrative)','Scenario A':a_result['potential_homes'],'Scenario B':b_result['potential_homes'],'Change (B − A)':comparison['delta']['potential_homes']},
+                        {'Metric':'Homes passing financial screen','Scenario A':a_result['screened_homes'],'Scenario B':b_result['screened_homes'],'Change (B − A)':comparison['delta']['screened_homes']},
+                        {'Metric':'Additional equity needed ($M)','Scenario A':a_result['equity_shortfall']/1e6,'Scenario B':b_result['equity_shortfall']/1e6,'Change (B − A)':comparison['delta']['equity_shortfall']/1e6},
+                        {'Metric':'Verified delivered homes','Scenario A':0,'Scenario B':0,'Change (B − A)':0}]
+            score_df=pd.DataFrame(score_rows)
+            st.dataframe(score_df.style.format({'Scenario A':'{:,.2f}','Scenario B':'{:,.2f}','Change (B − A)':'{:+,.2f}'}),use_container_width=True,hide_index=True)
+            st.markdown('**Housing capacity comparison**')
+            st.bar_chart(pd.DataFrame({'Scenario A':[a_result['potential_homes'],a_result['screened_homes']],'Scenario B':[b_result['potential_homes'],b_result['screened_homes']]},index=['Potential homes','Passing screen']))
+            st.markdown('**Geographic allocation comparison ($M)**')
+            st.bar_chart(pd.DataFrame({'Scenario A':a_result['areas'],'Scenario B':b_result['areas']}))
+            st.markdown('**Housing strategy allocation comparison ($M)**')
+            st.bar_chart(pd.DataFrame({'Scenario A':a_result['strategies'],'Scenario B':b_result['strategies']}))
+            st.download_button('Download A/B scenario comparison (CSV)',score_df.to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v2_3_1_scenario_comparison.csv',mime='text/csv',key='inv_compare_export')
+            st.warning(comparison['warning'])
+        else:
+            st.info('Capture both scenarios to display side-by-side outcomes. Save A, revise inputs, then save B.')
+
 
     st.markdown('#### Methodology and safeguards')
     with st.expander('What does the investment simulator measure?'):
