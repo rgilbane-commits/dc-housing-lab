@@ -22,19 +22,38 @@ class DevelopmentAssumptions:
     monthly_reserve_per_home: float = 35.0
 
 
-def _irr(cash):
-    if not any(x < 0 for x in cash) or not any(x > 0 for x in cash):
-        return None
-    def npv(rate): return sum(v / ((1+rate)**i) for i,v in enumerate(cash))
-    lo,hi=-0.95,1.0
-    if npv(lo)*npv(hi)>0:
-        return None
-    for _ in range(130):
-        mid=(lo+hi)/2
-        if npv(lo)*npv(mid)<=0: hi=mid
-        else:lo=mid
-    return (lo+hi)/2
+def _irr_roots(cash):
+    """Find roots on a bounded monthly rate grid; refuse ambiguous multiple-IRR cash flows."""
+    if not (any(x < 0 for x in cash) and any(x > 0 for x in cash)):
+        return []
+    # NPV in terminal-month dollars avoids large powers for rates approaching -100%.
+    def npv(rate):
+        q = 1.0 + rate
+        return sum(v * q ** (len(cash) - 1 - i) for i, v in enumerate(cash))
+    # Search log(1+r) to capture economically relevant negative as well as positive roots.
+    from math import exp, log
+    rates = [exp(log(0.01) + i * (log(3.0)-log(0.01))/500) - 1 for i in range(501)]
+    roots=[]
+    for lo,hi in zip(rates,rates[1:]):
+        f_lo,f_hi=npv(lo),npv(hi)
+        if f_lo==0:
+            root=lo
+        elif f_lo*f_hi>0:
+            continue
+        else:
+            for _ in range(70):
+                mid=(lo+hi)/2
+                if npv(mid)*f_lo<=0:hi=mid
+                else:lo=mid;f_lo=npv(lo)
+            root=(lo+hi)/2
+        if not roots or abs(roots[-1]-root)>1e-7:
+            roots.append(root)
+    return roots
 
+
+def _irr(cash):
+    roots=_irr_roots(cash)
+    return roots[0] if len(roots)==1 else None
 
 def _monthly_payment(principal, annual_rate_pct, amort_years):
     rate=annual_rate_pct/1200
@@ -95,7 +114,7 @@ def calculate(p, r, a=DevelopmentAssumptions()):
     pri_pay=_monthly_payment(private,p.private_rate_pct,p.private_amort_years)
     pub_pay=_monthly_payment(public,p.loan_rate_pct,p.loan_years)
     initial_noi=r['noi']
-    min_operating=0.0
+    min_operating=0.0; operating_deficit_total=0.0; operating_deficit_months=0
     for operating_month in range(1,a.hold_months+1):
         month=a.construction_months+operating_month
         occupancy_factor=min(1.0,operating_month/a.leaseup_months) if a.leaseup_months else 1.0
@@ -109,12 +128,16 @@ def calculate(p, r, a=DevelopmentAssumptions()):
         pub_balance=max(0.0,pub_balance+interest_pub-pub_ds)
         op_cash=noi-reserve-pri_ds-pub_ds
         min_operating=min(min_operating,op_cash)
+        if op_cash < 0:
+            operating_deficit_total += -op_cash
+            operating_deficit_months += 1
         flows.append(op_cash)
         rows.append({'month':month,'phase':'Operations','development_uses':0.0,'grant_draw':0.0,
                      'construction_debt_draw':0.0,'construction_interest':0.0,'construction_debt_balance':0.0,
                      'private_debt_balance':pri_balance,'public_debt_balance':pub_balance,'noi':noi,
                      'net_equity_cash_flow':op_cash})
     next_year_noi=initial_noi*((1+a.noi_growth_pct/100)**(a.hold_months/12))
+    irr_root_count=0
     if next_year_noi<=0:
         sale=None; net_sale=None; irr=None; multiple=None
     else:
@@ -122,7 +145,9 @@ def calculate(p, r, a=DevelopmentAssumptions()):
         net_sale=sale*(1-a.sale_cost_pct/100)-pri_balance-pub_balance
         flows[-1]+=net_sale
         rows[-1]['net_equity_cash_flow']+=net_sale
-        monthly_irr=_irr(flows)
+        roots=_irr_roots(flows)
+        irr_root_count=len(roots)
+        monthly_irr=roots[0] if len(roots)==1 else None
         irr=(1+monthly_irr)**12-1 if monthly_irr is not None else None
         invested=-sum(min(0.0,cf) for cf in flows)
         distributed=sum(max(0.0,cf) for cf in flows)
@@ -133,7 +158,14 @@ def calculate(p, r, a=DevelopmentAssumptions()):
             'equity_contributed_during_construction':total_equity,'net_permanent_financing_proceeds':net_refi,
             'ending_private_debt':pri_balance,'ending_public_debt':pub_balance,
             'terminal_noi':next_year_noi,'sale_value':sale,'net_sale_to_equity':net_sale,
+            'operating_deficit_total':operating_deficit_total,'operating_deficit_months':operating_deficit_months,
+            'refinance_equity_call':max(0.0,-net_refi),'refinance_equity_distribution':max(0.0,net_refi),
+            'irr_root_count':irr_root_count,
             'levered_irr':irr,'equity_multiple':multiple,'minimum_operating_cash':min_operating,
             'financing_screen_passed':bool(r['financing_feasible']),
             'unfunded_equity_at_stabilization':r['additional_equity_needed'],
-            'warning':'Scenario requires additional equity; modeled cash flows assume it is contributed.' if r['additional_equity_needed']>0 else ''}
+            'warning':'; '.join(x for x in [
+                'Scenario requires additional equity; modeled cash flows assume it is contributed.' if r['additional_equity_needed']>0 else '',
+                'Operating cash deficits are modeled as additional equity contributions; liquidity and reserves are not independently sized.' if operating_deficit_months else '',
+                'IRR unavailable: multiple mathematical roots; equity multiple remains a cash-flow statistic.' if irr_root_count>1 else ''
+            ] if x)}
