@@ -21,6 +21,7 @@ from geo_denominators import retrieve as retrieve_denominators, DenominatorUnava
 from investment_strategy import AREAS, STRATEGIES, SUBSIDY_PER_HOME, Line, evaluate as evaluate_investment
 from investment_feasibility import FundingAssumptions, assess_portfolio
 from scenario_compare import capture as capture_investment_scenario, compare as compare_investment_scenarios
+from geographic_visuals import qualified_chart_rows, map_marker_legend, area_quality_summary
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
@@ -37,7 +38,7 @@ st.markdown("""<style>
 </style>""",unsafe_allow_html=True)
 
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v2.3.0 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v2.3.2 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -288,6 +289,32 @@ with tabs[1]:
     st.caption('Cash grant does not create operating income. Repayable public loan may provide upfront cash but also requires future debt service. Private debt and equity commitments are illustrative sources, not sized from actual lender or investor commitments. Private loan DSCR, LTV and LTC limits are illustrative; they do not represent a lender commitment.')
 
 with tabs[2]:
+    st.markdown('## DC Housing Explorer | Geographic dashboard')
+    st.caption('Official DC planning areas, historical project records, and Census approximations. This workspace does not establish housing need or investment priority.')
+    st.markdown('### Map and geographic evidence')
+    with st.container(border=True):
+        st.markdown('**Official geography and live project markers**')
+        st.caption('Toggle the official boundary layer below to view a planning-area map. The map is suppressed if geometry and assigned project coordinates do not reconcile.')
+        st.markdown(map_marker_legend())
+    geo_summaries = []
+    for entry in st.session_state.get('v21_evidence', []):
+        try:
+            geo_summaries.append(analyze_area(entry))
+        except (DataUnavailable, ValueError):
+            pass
+    if geo_summaries:
+        st.markdown('### Geographic housing activity')
+        qualified = qualified_chart_rows(geo_summaries)
+        c_left,c_right=st.columns([3,2])
+        with c_left:
+            st.bar_chart(pd.DataFrame(qualified).set_index('Planning area')[['Reported production','Reported preservation']],stack=False,use_container_width=True)
+            st.caption('Bars are displayed only for fully classified GIS records. Incomplete geographies show no unit totals; missing values are never interpreted as zero.')
+        with c_right:
+            st.dataframe(pd.DataFrame([area_quality_summary(x) for x in geo_summaries]),hide_index=True,use_container_width=True)
+            st.caption('Source completeness describes field coverage, not independent verification of project completion.')
+    else:
+        st.info('Select **Analyze all three planning areas** below to load verified GIS comparisons and activate the geographic dashboard.')
+    st.divider()
     st.markdown('## Policy lab · Neighborhood and geographic evidence')
     st.subheader('Explore DC neighborhoods on the map')
     st.caption('Click one of the neighborhood markers to load its illustrative development baseline. Map points represent approximate neighborhood centers, not parcel locations. Map tiles use OpenStreetMap without an API key; internet access is required.')
@@ -475,6 +502,7 @@ with tabs[2]:
                         'Interpolation error quantified':False})
                 if normalized:
                     st.dataframe(pd.DataFrame(normalized),hide_index=True,use_container_width=True)
+                    st.caption('Household-rate comparisons use area-weighted 2024 ACS estimates; 90% MOE proxies exclude geographic interpolation error and are not valid planning-area confidence intervals.')
                     st.download_button('Download qualified area-weighted denominators (CSV)',pd.DataFrame(normalized).to_csv(index=False).encode('utf-8'),file_name='DC_Area_Weighted_Denominators_v2_1_2.csv',mime='text/csv',key='v211_export')
                 st.caption('Numerator: GIS-reported units in projects since 2015; denominator: 2024 ACS estimated households or housing units. This is a cross-vintage intensity measure, NOT current affordable housing share, net growth, or need. Area-weighting introduces unquantified interpolation error. An approximate root-sum-square aggregation of ACS 90% margins of error is shown when available, but it is NOT a valid full planning-area confidence interval.')
             st.markdown('**Source freshness & audit trail**')

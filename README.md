@@ -1,13 +1,12 @@
-# DC Housing Lab v2.3.1 — Investment Strategy Visualization
+# DC Housing Lab v2.3.2
+Full Streamlit application. Deploy by replacing matching files in the existing GitHub repository, including `geographic_visuals.py`; retain `requirements.txt` and `tests/`.
 
-## Deployment
-Unzip and upload the application files to the existing GitHub Streamlit repository, replacing matching files, including `app.py`, `scenario_compare.py` and the new test file. Keep the project's Streamlit entry point as `app.py`. Dependencies are unchanged.
+Navigate to **DC Housing Explorer**. Under **Geographic Housing Intelligence**, choose **Analyze all three planning areas** to populate the dashboard. Activate the official boundary map separately using its checkbox. The grouping chart shows numbers only for fully classified source datasets; empty columns are *not* zero.
 
-## Usage
-Open **Investment Strategy**. Allocate grants to DC planning areas/strategies and select funding assumptions. Below the financial screening table, enter a scenario label and select **Save as Scenario A**. Change inputs and select **Save as Scenario B**. Compare the metric table and three bar charts or download the A/B CSV. To begin again, use **Clear saved scenarios**.
+## Acceptance gates
+1. Browser-load all five workspaces and run official map after fresh GIS retrieval.
+2. Check three-area chart and source completeness vs underlying live GIS records.
+3. Verify Census denominators, missing-data states, and exports.
+4. Confirm project financial and investment pages remain unchanged.
 
-## Interpretation
-All allocations and public support per home are illustrative. 'Potential homes' are mathematical capacity under user-selected subsidy assumptions; 'passing financial screen' means a hypothetical underwriting archetype passed automated tests, **not** a development approval. Delivered homes always remain zero. A/B snapshots are session-only.
-
-## Quality control
-See `QA_AUDIT_REPORT_v2.3.1.md` and `SHA256_MANIFEST_v2.3.1.txt`. Browser QA is required before production acceptance.
+Live Streamlit/browser and network GIS tests were not run here; approve only after hosted validation.
