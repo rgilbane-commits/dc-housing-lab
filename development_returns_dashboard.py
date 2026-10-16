@@ -39,6 +39,10 @@ def render(p,r):
     d2.metric('Equity multiple',f"{result['equity_multiple']:.2f}×" if result['equity_multiple'] is not None else 'N/A')
     d3.metric('Construction interest',millions(result['construction_interest']))
     d4.metric('Net sale proceeds',millions(result['net_sale_to_equity']))
+    k1,k2,k3=st.columns(3)
+    k1.metric('Lease-up / operations deficit funding',millions(result['operating_deficit_total']))
+    k2.metric('Months requiring operating cash support',str(result['operating_deficit_months']))
+    k3.metric('Equity required at construction takeout',millions(result['refinance_equity_call']))
     if result['warning']:st.warning(result['warning'])
     if result['minimum_operating_cash'] < 0:st.warning('At least one month has negative cash after operating expenses, reserves and debt service.')
     if not result['financing_screen_passed']:st.error('Financing screen is not satisfied; displayed returns assume the necessary equity is funded.')
@@ -64,8 +68,26 @@ def render(p,r):
             except ValueError:line[f'{cap_change:+.1f}pp']=None
         matrix.append(line)
     df=pd.DataFrame(matrix).set_index('Cost change')
-    st.dataframe(df.style.format('{:.1f}%',na_rep='N/A').background_gradient(axis=None,cmap='RdYlGn'),use_container_width=True)
+    # Avoid Styler.background_gradient: it requires optional matplotlib at runtime.
+    # Only display colors change; sensitivity values continue to come from calculate().
+    def irr_cell_style(value):
+        if pd.isna(value):
+            return 'background-color: #e5e7eb; color: #374151'
+        # Deliberately fixed, interpretable annual IRR bands rather than a
+        # scenario-relative scale that can make weak results appear strong.
+        if value < 0:
+            return 'background-color: #f6cac6; color: #50251f'
+        if value < 5:
+            return 'background-color: #f7ded1; color: #503222'
+        if value < 10:
+            return 'background-color: #f8eed2; color: #4c4229'
+        if value < 15:
+            return 'background-color: #e2edd9; color: #264330'
+        return 'background-color: #cae8d6; color: #204b36'
+    styled=df.style.format('{:.1f}%',na_rep='N/A').map(irr_cell_style)
+    st.dataframe(styled,use_container_width=True)
     st.caption('IRR matrix in percentage terms. Each case re-underwrites project cost and permanent debt capacity. Cells are unavailable when financing constraints invalidate the scenario. A positive IRR is not evidence of lender approval or fundable equity.')
     export=data.copy()
     st.download_button('Download monthly cash-flow ledger (CSV)',export.to_csv(index=False).encode('utf-8'),file_name='dc_housing_lab_monthly_development_returns.csv',mime='text/csv',key='returns_monthly_csv')
+    st.caption('IRR is suppressed if more than one mathematical root exists within the modeled monthly rate range (−99% to +200%). Negative operating cash flow is represented as incremental equity funding; no separate liquidity reserve is modeled.')
     st.caption('Important: Construction and permanent financing are simplified. The engine excludes taxes, capital-call dates, LIHTC installments, promote waterfalls, refinance covenants, lease-up concessions, and cash-trap mechanisms. A return computed on modeled equity does not establish achievable investor returns.')
