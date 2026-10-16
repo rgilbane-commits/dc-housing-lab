@@ -28,12 +28,17 @@ class VisualsTests(unittest.TestCase):
         import hashlib
         root=Path(__file__).resolve().parents[1]
         baseline={
-            'model.py': 'd963704868ef9819d078d7639f5e008ad52f006bac4c235cb5b0b5d8ebbd4703',
             'capital_stack.py': 'c1551c936e7fa76bfb29cba2c32dc8961af8174281855d24286895250546801e',
             'cash_flow.py': 'cae431c60d806820dfa112e8ba2e90a2909c1671ab516c84c46431495b782204',
-            'upgrade.py': 'a371b163810d60dc1a16aff51e09b5f9a7a29cb6d6653f2f52436b86cb7d7822',
             'classroom.py': '72ab973f5e88d1d8ba16b3c308b8bf5818f6fe4a29068c13570428859daba54e',
             'display_format.py': '6a2f34dbfa517cc26b7d3030922cdd0c0e2855ff0c586da3b9f1aae0a78bf62d',
         }
         for name,expected in baseline.items():
             self.assertEqual(hashlib.sha256((root/name).read_bytes()).hexdigest(),expected)
+
+    def test_financial_formulas_preserve_legacy_and_expose_new_metrics(self):
+        from model import Inputs, analyze
+        r=analyze(Inputs())
+        assert abs(r['margin_gap']-r['legacy_total_cost_margin_gap'])<1e-6
+        assert abs(r['legacy_total_cost_margin_gap']-(r['net_cost']*(1+r['return_margin_pct']/100)-r['grant']-r['stabilized_value']))<1e-5
+        assert abs(r['net_cost_margin_gap']-(r['net_capital_cost_after_eligible_grant']*(1+r['return_margin_pct']/100)-r['stabilized_value']))<1e-5

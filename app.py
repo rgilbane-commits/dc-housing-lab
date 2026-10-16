@@ -93,6 +93,7 @@ st.sidebar.header('Choose your city')
 place=st.sidebar.selectbox('Neighborhood',list(NEIGHBORHOODS),key='neighborhood')
 scenario=st.sidebar.selectbox('Policy scenario',list(PRESETS),key='scenario')
 st.sidebar.caption(NEIGHBORHOODS[place]['tagline'])
+st.sidebar.caption('Reference locations are not ward boundaries. The geographic analysis uses official Comprehensive Plan planning areas.')
 if st.sidebar.button('↻ Load selected neighborhood and scenario',use_container_width=True):
     load(place,scenario)
     st.session_state.baseline_values=neighborhood_inputs(place,scenario)
@@ -162,9 +163,10 @@ with workspaces[0]:
     st.markdown('### Financial position')
     q1,q2,q3,q4=st.columns(4)
     q1.metric('Additional equity required',fm(r['additional_equity_needed']))
-    q2.metric('Economic margin gap',fm(r['economic_gap']))
+    q2.metric('Total-cost hurdle shortfall after grant',fm(r['legacy_total_cost_margin_gap']),help='Signed: net cost × (1 + required margin) − grant − stabilized value. Legacy grant-offset test; not an equity funding shortfall.')
     q3.metric('Total debt coverage',f"{r['total_dscr']:.2f}×" if r['total_dscr'] is not None else 'N/A')
     q4.metric('Private debt funded',fm(r['funded_private_debt']))
+    st.caption(f"Unsubsidized value–cost spread: {fm(r['unsubsidized_value_cost_spread'])} · Conditional net-cost margin gap: {fm(r['net_cost_margin_gap'])}. A negative gap indicates headroom, not a missing value. Grant availability and restrictions are unverified.")
     k1,k2=st.columns([1,1])
     with k1:
         st.markdown('#### Building program')
@@ -179,7 +181,7 @@ with workspaces[0]:
     if r['additional_equity_needed']>0.01:
         st.warning('Additional equity is still required. Illustrated economic results do not constitute financing commitments.')
     if not r['meets_simple_test']:
-        st.warning('Economic margin test is not satisfied under the selected assumptions.')
+        st.warning('Total-cost margin hurdle (including modeled grant) is not satisfied under the selected assumptions.')
     st.caption('Overview presents modeled estimates, not observed market transactions. Values are generated from the same financial model used by Development Studio.')
 
 with tabs[0]:
@@ -196,7 +198,7 @@ with tabs[0]:
         st.caption('Save investment Scenarios A and B to unlock the two-scenario policy brief.')
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
-    a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Economic margin gap',fm(r['margin_gap']) if r['margin_gap']>0 else 'None',help='Positive = remaining gap; zero or negative = meets this simplified margin test. This is not a financeability approval.')
+    a.metric('Homes',integer(r['units'])); b.metric('Restricted homes',integer(r['restricted_units']));c.metric('Public grant',fm(r['grant']));d.metric('Total-cost hurdle shortfall after grant',fm(r['legacy_total_cost_margin_gap']),help='Signed result; negative means headroom in this grant-offset test. Not a financing approval.')
     st.caption(f"Restricted share: {percentage(100*r['restricted_units']/r['units'], 1)} of all homes; market-rate share: {percentage(100*r['market_units']/r['units'], 1)}.")
     st.markdown(building_massing(r['units'],r['restricted_units']),unsafe_allow_html=True)
     if presentation:
@@ -212,8 +214,8 @@ with tabs[0]:
         st.error('Requested public loan exceeds supportable DSCR capacity; not a feasible financing structure. Loan proceeds are shown as requested only.')
     if r['excess_financing_sources']>0:
         st.warning('Requested sources exceed project uses; capital structure must be revised.')
-    if r['meets_simple_test']:st.success('✓ The modeled value covers cost plus the illustrative required margin. Not a financing approval.')
-    else: st.warning('The project does not reach the illustrative required margin. Try changing the plan or policy.')
+    if r['meets_simple_test']:st.success('✓ Stabilized value plus the modeled grant meets the illustrative total-cost margin hurdle. Grant restrictions and financing feasibility are separate tests.')
+    else: st.warning('Stabilized value plus modeled grant does not meet the illustrative total-cost margin hurdle. Financing feasibility is separate.')
     st.write('**Ask:** Is it more equitable to build fewer deeply affordable units in a high-opportunity neighborhood, or more units elsewhere?')
     st.info('Instructor tip: students should distinguish a public grant (permanent capital support), discounted land (foregone public value), and a repayable loan (a financial obligation).')
 
@@ -288,12 +290,12 @@ with tabs[1]:
     from dataclasses import replace as _replace
     grant_case=analyze(_replace(p,grant_m=p.grant_m+demo_m,loan_m=p.loan_m))
     loan_case=analyze(_replace(p,grant_m=p.grant_m,loan_m=p.loan_m+demo_m))
-    demo=pd.DataFrame([{'Case':'Additional grant','Upfront public capital ($)':demo_m*1e6,'Economic margin gap ($)':grant_case['economic_gap'],'Capital funding gap ($)':grant_case['capital_stack_gap'],'Annual public-loan payment ($)':grant_case['annual_public_loan_payment']},{'Case':'Additional loan','Upfront public capital ($)':demo_m*1e6,'Economic margin gap ($)':loan_case['economic_gap'],'Capital funding gap ($)':loan_case['capital_stack_gap'],'Annual public-loan payment ($)':loan_case['annual_public_loan_payment']}])
+    demo=pd.DataFrame([{'Case':'Additional grant','Upfront public capital ($)':demo_m*1e6,'Legacy total-cost hurdle shortfall ($)':grant_case['economic_gap'],'Capital funding gap ($)':grant_case['capital_stack_gap'],'Annual public-loan payment ($)':grant_case['annual_public_loan_payment']},{'Case':'Additional loan','Upfront public capital ($)':demo_m*1e6,'Legacy total-cost hurdle shortfall ($)':loan_case['economic_gap'],'Capital funding gap ($)':loan_case['capital_stack_gap'],'Annual public-loan payment ($)':loan_case['annual_public_loan_payment']}])
     st.dataframe(demo.style.format({c:lambda v: money(v) for c in demo.columns if '($)' in c}),hide_index=True,use_container_width=True)
     st.caption('Scenarios add funding to the currently selected base case. Both supply upfront capital; only the loan requires repayment. No private-debt interest costs, covenant restrictions or grant eligibility tests are modeled.')
     plot=pd.DataFrame({'Millions ($)':{'Net project cost':r['net_cost']/1e6,'Unlevered stabilized value + grant':(r['stabilized_value']+r['grant'])/1e6,'Target (cost + required margin)':r['net_cost']*(1+p.return_margin_pct/100)/1e6}})
     st.bar_chart(plot,horizontal=True)
-    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Requested private loan',r['private_debt']),('Supportable private loan used',r['funded_private_debt']),('Private debt service / year',r['private_annual_debt_service']),('Total public + private debt service / year',r['total_annual_debt_service']),('Equity required after supportable private loan',r['equity_required']),('Additional equity needed beyond commitment',r['additional_equity_needed']),('Illustrative equity commitments',r['committed_equity']),('Capital funding gap (sources less uses)',r['capital_stack_gap']),('Economic gap before margin',r['basic_gap']),('Economic gap to required margin',r['margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
+    st.dataframe(pd.DataFrame([('Gross scheduled rent',r['gross_rent']),('Effective rent',r['egi']),('Operating expenses',r['egi']-r['noi']),('NOI',r['noi']),('Annual public-loan payment',r['annual_public_loan_payment']),('NOI net of public-loan payment',r['residual_noi']),('Project cost net of land contribution',r['net_cost']),('Cash grant',r['grant']),('Loan proceeds (repayable, NOT grant)',r['loan']),('Requested private loan',r['private_debt']),('Supportable private loan used',r['funded_private_debt']),('Private debt service / year',r['private_annual_debt_service']),('Total public + private debt service / year',r['total_annual_debt_service']),('Equity required after supportable private loan',r['equity_required']),('Additional equity needed beyond commitment',r['additional_equity_needed']),('Illustrative equity commitments',r['committed_equity']),('Capital funding gap (sources less uses)',r['capital_stack_gap']),('Unsubsidized value less net development cost',r['unsubsidized_value_cost_spread']),('Net capital cost after assumed eligible grant',r['net_capital_cost_after_eligible_grant']),('Net-cost margin gap (assumed unrestricted grant)',r['net_cost_margin_gap']),('Legacy total-cost hurdle shortfall after grant',r['legacy_total_cost_margin_gap'])],columns=['Measure','Amount ($)']).style.format({'Amount ($)':lambda x: money(x)}),hide_index=True,use_container_width=True)
     if r['residual_noi']<=0:st.error('Public loan payment consumes all modeled NOI; public-only DSCR is below 1.0x.')
     if r['public_loan_dscr'] is not None: st.metric('Public loan DSCR (excludes private debt)',f"{r['public_loan_dscr']:.2f}×")
     st.info('Legacy committed-sources capital gap = net development cost − grants − public loan proceeds − illustrative committed private debt − illustrative committed equity. Positive indicates unfilled funding; negative indicates excess identified sources. The new debt sizing and equity analysis above uses supportable rather than simply entered debt.')
@@ -324,7 +326,7 @@ with tabs[2]:
             st.dataframe(pd.DataFrame([area_quality_summary(x) for x in geo_summaries]),hide_index=True,use_container_width=True)
             st.caption('Source completeness describes field coverage, not independent verification of project completion.')
     else:
-        st.info('Select **Analyze all three planning areas** below to load verified GIS comparisons and activate the geographic dashboard.')
+        st.info('Select **Analyze all ten planning areas** below to load verified GIS comparisons and activate the geographic dashboard.')
     st.divider()
     st.markdown('## Policy lab · Neighborhood and geographic evidence')
     st.subheader('Explore DC neighborhoods on the map')
@@ -348,8 +350,8 @@ with tabs[2]:
     st.caption('These are government-reported historical observations for DC planning areas, NOT neighborhood-level rents, current affordable inventory, site zoning, or underwriting inputs. Planning-area boundaries differ from ward and neighborhood boundaries.')
     c1,c2,c3=st.columns(3)
     c1.metric('Districtwide homes delivered through Jul 2024',f"{dc['delivered_units']:,}",help='DMPED announcement dated July 29, 2024; not a current 2026 total.')
-    c2.metric(f"{ctx['area']} dedicated affordable units (2018)",f"{ctx['existing_2018']:,}",help='2018 planning-area inventory from 2019 Housing Equity Report; not current count.')
-    c3.metric(f"{ctx['area']} additional affordable-unit goal (2025)",f"{ctx['target_2025']:,}",help='Target from 2019 report, not achieved production.')
+    c2.metric(f"{ctx['area']} dedicated affordable units (2018)",f"{ctx['existing_2018']:,}" if ctx['existing_2018'] is not None else 'Not verified',help='2018 planning-area inventory from 2019 Housing Equity Report; not current count.')
+    c3.metric(f"{ctx['area']} additional affordable-unit goal (2025)",f"{ctx['target_2025']:,}" if ctx['target_2025'] is not None else 'Not verified',help='Target from 2019 report, not achieved production.')
     st.markdown(f"**Selected neighborhood:** {place}  |  **Context geography:** {ctx['area']} planning area")
     st.info('Do not subtract the 2018 inventory from the 2025 target: the former is a stock of existing homes and the latter is a goal for additional affordable homes. Neither is the number of currently available apartments.')
     st.markdown(f"[2019 Housing Equity Report]({ctx['source_url']}) · [July 2024 production announcement]({dc['source_url']})")
@@ -428,7 +430,8 @@ with tabs[2]:
             if missing: st.warning('Not all source projects have valid coordinates. Map dots cannot be used as an exhaustive project-location inventory.')
         except Exception as exc:
             st.warning(f'Geospatial data not verified: {exc}. No boundary or project markers shown; underwriting is unaffected.')
-    st.markdown('#### Compare the three planning areas (live, when available)')
+    st.markdown('#### Compare all ten planning areas (live, when available)')
+    st.caption('Coverage includes all ten official DC planning areas. Ward labels identify reference neighborhoods only; do not interpret planning-area counts as ward totals.')
     if st.button('Fetch planning-area comparison',key='fetch_three_areas'):
         comparison=[]
         for geo_name in NEIGHBORHOODS:
@@ -446,7 +449,7 @@ with tabs[2]:
     st.divider()
     st.subheader('Geographic Housing Intelligence | production and preservation')
     st.caption('Planning-area analysis based solely on GIS-recorded projects started or completed since 2015. Missing fields are NOT treated as zero. This is not net additions, current inventory, or measured housing need.')
-    if st.button('Analyze all three planning areas',key='v21_intelligence_refresh'):
+    if st.button('Analyze all ten planning areas',key='v21_intelligence_refresh'):
         analyzed=[]; failures=[]
         for n in NEIGHBORHOODS:
             try:analyzed.append(cached_gis(n))
@@ -543,8 +546,8 @@ with tabs[2]:
     rows=[]
     for name in NEIGHBORHOODS:
         x=analyze(neighborhood_inputs(name,scenario))
-        rows.append({'Neighborhood':name,'Homes':x['units'],'Restricted':x['restricted_units'],'Market rent ($/mo)':x['market_rent'],'Cost per home ($)':x['cost_per_unit'],'Economic margin gap ($M)':round(x['margin_gap']/1e6,1)})
-    st.dataframe(pd.DataFrame(rows).style.format({'Homes':'{:,.0f}','Restricted':'{:,.0f}','Market rent ($/mo)':lambda x:money(x),'Cost per home ($)':lambda x:money(x),'Economic margin gap ($M)':lambda x: money(x*1e6,compact=True)}),hide_index=True,use_container_width=True)
+        rows.append({'Neighborhood':name,'Homes':x['units'],'Restricted':x['restricted_units'],'Market rent ($/mo)':x['market_rent'],'Cost per home ($)':x['cost_per_unit'],'Legacy total-cost hurdle shortfall ($M)':round(x['margin_gap']/1e6,1)})
+    st.dataframe(pd.DataFrame(rows).style.format({'Homes':'{:,.0f}','Restricted':'{:,.0f}','Market rent ($/mo)':lambda x:money(x),'Cost per home ($)':lambda x:money(x),'Legacy total-cost hurdle shortfall ($M)':lambda x: money(x*1e6,compact=True)}),hide_index=True,use_container_width=True)
 
 with tabs[3]:
     st.markdown('## Who can afford it?')
@@ -585,7 +588,7 @@ with tabs[4]:
     if st.button('Save proposal',type='primary'):
         if not team.strip():st.error('Enter your team name first.')
         else:
-            st.session_state.saved.append({'Team':team.strip()[:40],'Neighborhood':place,'Priority':priority,'Homes':p.units,'Restricted homes':r['restricted_units'],'Restricted rent ($)':p.affordable_rent,'Grant ($M)':p.grant_m,'Land credit ($M)':p.land_credit_m,'Loan ($M)':p.loan_m,'Economic margin gap ($M)':round(r['margin_gap']/1e6,2),'Private debt used ($M)':round(r['funded_private_debt']/1e6,2),'Required equity ($M)':round(r['equity_required']/1e6,2),'Total DSCR (x)':round(r['total_dscr'],2) if r['total_dscr'] is not None else None,'Goals met':sum(goals)})
+            st.session_state.saved.append({'Team':team.strip()[:40],'Neighborhood':place,'Priority':priority,'Homes':p.units,'Restricted homes':r['restricted_units'],'Restricted rent ($)':p.affordable_rent,'Grant ($M)':p.grant_m,'Land credit ($M)':p.land_credit_m,'Loan ($M)':p.loan_m,'Legacy total-cost hurdle shortfall ($M)':round(r['margin_gap']/1e6,2),'Private debt used ($M)':round(r['funded_private_debt']/1e6,2),'Required equity ($M)':round(r['equity_required']/1e6,2),'Total DSCR (x)':round(r['total_dscr'],2) if r['total_dscr'] is not None else None,'Goals met':sum(goals)})
             st.success('Saved to this browser session. Download a CSV to retain it.')
     if st.session_state.saved:
         df=pd.DataFrame(st.session_state.saved)
@@ -596,7 +599,7 @@ with tabs[4]:
     for file in files or []:
         try:
             x=pd.read_csv(file)
-            if {'Team','Homes','Restricted homes','Economic margin gap ($M)'}.issubset(x.columns):loaded.append(x)
+            if {'Team','Homes','Restricted homes','Legacy total-cost hurdle shortfall ($M)'}.issubset(x.columns):loaded.append(x)
             else:st.warning(f'{file.name}: does not match proposal format')
         except Exception as exc:st.warning(f'{file.name}: could not open ({exc})')
     if loaded:

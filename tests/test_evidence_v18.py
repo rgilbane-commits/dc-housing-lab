@@ -8,7 +8,7 @@ def test_verified_historical_values():
     assert planning_area_context('Friendship Heights / Ward 3')['existing_2018']==470
     assert planning_area_context('Columbia Heights / Ward 1')['existing_2018']==6960
     assert planning_area_context('Congress Heights / Ward 8')['existing_2018']==15760
-    assert sum(x['target_2025'] for x in PLANNING_AREAS.values())==4120
+    assert sum(x['target_2025'] for x in PLANNING_AREAS.values() if x['target_2025'] is not None)==4120
 
 def test_geo_period_traceability():
     for name in NEIGHBORHOODS:

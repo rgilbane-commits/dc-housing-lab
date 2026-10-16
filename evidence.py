@@ -13,6 +13,13 @@ PLANNING_AREAS = {
     "Friendship Heights / Ward 3": {"area":"Rock Creek West", "existing_2018":470, "target_2025":1990},
     "Columbia Heights / Ward 1": {"area":"Mid-City", "existing_2018":6960, "target_2025":1010},
     "Congress Heights / Ward 8": {"area":"Far Southeast & Southwest", "existing_2018":15760, "target_2025":1120},
+    'Downtown / Ward 2': {"area":'Central Washington', "existing_2018":None, "target_2025":None},
+    'Takoma / Ward 4': {"area":'Rock Creek East', "existing_2018":None, "target_2025":None},
+    'Brookland / Ward 5': {"area":'Upper Northeast', "existing_2018":None, "target_2025":None},
+    'Capitol Hill / Ward 6': {"area":'Capitol Hill', "existing_2018":None, "target_2025":None},
+    'Deanwood / Ward 7': {"area":'Far Northeast and Southeast', "existing_2018":None, "target_2025":None},
+    'Dupont Circle / Ward 2': {"area":'Near Northwest', "existing_2018":None, "target_2025":None},
+    'Navy Yard / Ward 6': {"area":'Lower Anacostia Waterfront and Near Southwest', "existing_2018":None, "target_2025":None},
 }
 
 SOURCES = [

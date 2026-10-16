@@ -5,7 +5,7 @@ from shapely.ops import unary_union
 from shapely.validation import explain_validity
 from live_data import get_json, DataUnavailable, normalize_area, CENTERS, utc_now
 PLANNING_LAYER = 'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Planning_Landuse_and_Zoning_WebMercator/MapServer/2'
-AREA_NAMES = {'Friendship Heights / Ward 3':'Rock Creek West', 'Columbia Heights / Ward 1':'Mid-City', 'Congress Heights / Ward 8':'Far Southeast and Southwest'}
+AREA_NAMES = {'Friendship Heights / Ward 3':'Rock Creek West', 'Columbia Heights / Ward 1':'Mid-City', 'Congress Heights / Ward 8':'Far Southeast and Southwest','Downtown / Ward 2':'Central Washington','Takoma / Ward 4':'Rock Creek East','Brookland / Ward 5':'Upper Northeast','Capitol Hill / Ward 6':'Capitol Hill','Deanwood / Ward 7':'Far Northeast and Southeast','Dupont Circle / Ward 2':'Near Northwest','Navy Yard / Ward 6':'Lower Anacostia Waterfront and Near Southwest'}
 
 def _signed_area(ring):
     return sum((a[0]*b[1]-b[0]*a[1]) for a,b in zip(ring,ring[1:]))/2
@@ -54,8 +54,13 @@ def boundary_geometry(name,session=None):
     geom=_geometry((feature.get('geometry') or {}).get('rings'))
     lat,lon,_=CENTERS[name]
     if not geom.covers(Point(lon,lat)):
-        raise DataUnavailable('Neighborhood reference point is outside matched boundary; reference geography unverified.')
-    return {'name':feature['attributes']['NAME'],'object_id':oid,'geojson':mapping(geom),'retrieved_at':utc_now(),'source':PLANNING_LAYER}
+        if name in ('Friendship Heights / Ward 3','Columbia Heights / Ward 1','Congress Heights / Ward 8'):
+            raise DataUnavailable('Neighborhood reference point is outside matched boundary; reference geography unverified.')
+        # Newly added planning-area references use a verified point within the official polygon.
+        # Do not imply an out-of-polygon illustrative marker is a valid location.
+        point=geom.representative_point()
+        lon,lat=point.x,point.y
+    return {'name':feature['attributes']['NAME'],'object_id':oid,'geojson':mapping(geom),'retrieved_at':utc_now(),'source':PLANNING_LAYER,'map_center':[lat,lon]}
 
 def project_points(gis,boundary=None):
     """Exclude invalid and outside-boundary points; count each separately."""
@@ -76,7 +81,7 @@ def project_points(gis,boundary=None):
 def planning_map(selected,boundary,gis):
     import folium
     from streamlit_folium import st_folium
-    lat,lon,_=CENTERS[selected]
+    lat,lon=boundary.get('map_center',CENTERS[selected][:2])
     points,missing=project_points(gis,boundary)  # Verify all markers before drawing ANY map.
     m=folium.Map(location=[lat,lon],zoom_start=12,tiles='OpenStreetMap',control_scale=True)
     folium.GeoJson(boundary['geojson'],style_function=lambda _: {'color':'#146985','weight':3,'fillColor':'#43a5b0','fillOpacity':.12},tooltip='Official planning area: '+boundary['name']).add_to(m)

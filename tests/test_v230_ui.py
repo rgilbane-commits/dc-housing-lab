@@ -19,7 +19,7 @@ def test_ten_legacy_sections_retained():
 
 def test_overview_uses_model_results():
     assert "r=analyze(p)" in SRC
-    for key in ['restricted_units','additional_equity_needed','economic_gap','total_dscr','funded_private_debt']:
+    for key in ['restricted_units','additional_equity_needed','legacy_total_cost_margin_gap','total_dscr','funded_private_debt']:
         assert "r['"+key+"']" in SRC
     assert 'finance_stack(breakdown(r)' in SRC
     assert 'waterfall_chart(annual_waterfall(r)' in SRC

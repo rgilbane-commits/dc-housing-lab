@@ -42,7 +42,7 @@ def create_student_pdf(name, neighborhood, priority, p, r):
     kv(410,365,'Total DSCR',f"{r['total_dscr']:.2f}x" if r['total_dscr'] is not None else 'No debt')
     cash=r['noi']-r['total_annual_debt_service']
     kv(44,315,'Annual cash flow to equity',_usd(cash))
-    kv(220,315,'Economic margin gap',_usd(r['margin_gap']))
+    kv(220,315,'Total-cost hurdle after grant',_usd(r['margin_gap']))
     coc=cash/r['equity_required']*100 if r['equity_required']>0 else None
     kv(410,315,'Cash-on-cash (illustrative)',f'{coc:.1f}%' if coc is not None else 'N/A')
     section(259,'Defend your decisions')

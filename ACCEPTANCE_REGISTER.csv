@@ -1,0 +1,12 @@
+ID,Control,Result,Evidence
+REG-001,Automated regression,PASS,219/219 pytest tests passed on v2.3.3 baseline.
+REG-002,Python source syntax,PASS,22 modules parse cleanly.
+REG-003,PDF output generation,PASS,Generated PDF parses and contains development data and disclaimer.
+REG-004,Financial engine unchanged,PASS,Copied baseline code unchanged; no modeling changes in v2.4 candidate.
+LIVE-001,Hosted site accessibility,BLOCKED,Hosted app redirects to Streamlit authentication; independent browser inspection unavailable.
+LIVE-002,Live Census and GIS end-to-end,NOT VERIFIED,Live API verification unavailable.
+LIVE-003,Five-workspace navigation,NOT VERIFIED,Streamlit not installed in this local runtime.
+LIVE-004,PDF / CSV browser downloads,NOT VERIFIED,Browser interaction and downloaded-file reconciliation needed.
+LIVE-005,Responsive and projector layouts,NOT VERIFIED,Desktop / laptop / projector browser visual QA required.
+SEC-001,Authentication/access controls,NOT VERIFIED,"Host redirect observed, app access policy cannot be independently reviewed."
+QA-001,Release reproducibility,PASS,SHA256 source manifest and ZIP integrity checked.

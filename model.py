@@ -30,6 +30,13 @@ NEIGHBORHOODS = {
     'Friendship Heights / Ward 3': {'market_rent': 3900, 'cost_per_unit': 590000, 'density': 160, 'tagline': 'Higher illustrative rents and land/development costs; transit access.'},
     'Columbia Heights / Ward 1': {'market_rent': 3200, 'cost_per_unit': 490000, 'density': 200, 'tagline': 'Transit-rich mixed-use area with competing neighborhood needs.'},
     'Congress Heights / Ward 8': {'market_rent': 2600, 'cost_per_unit': 420000, 'density': 180, 'tagline': 'Lower illustrative market rents; financing can remain challenging.'},
+    'Downtown / Ward 2': {'market_rent': 3650, 'cost_per_unit': 570000, 'density': 190, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
+    'Takoma / Ward 4': {'market_rent': 2950, 'cost_per_unit': 460000, 'density': 180, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
+    'Brookland / Ward 5': {'market_rent': 3100, 'cost_per_unit': 475000, 'density': 180, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
+    'Capitol Hill / Ward 6': {'market_rent': 3450, 'cost_per_unit': 540000, 'density': 170, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
+    'Deanwood / Ward 7': {'market_rent': 2500, 'cost_per_unit': 415000, 'density': 180, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
+    'Dupont Circle / Ward 2': {'market_rent': 3700, 'cost_per_unit': 555000, 'density': 160, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
+    'Navy Yard / Ward 6': {'market_rent': 3400, 'cost_per_unit': 525000, 'density': 190, 'tagline': 'Illustrative teaching assumptions only; represents one Comprehensive Plan area, not the entire ward.'},
 }
 
 PRESETS = {
@@ -71,6 +78,14 @@ def analyze(p: Inputs) -> dict:
     # MUST NEVER be subtracted from NOI before capitalization.
     economic_gap = net_cost*(1+p.return_margin_pct/100) - grant - value
     gap = net_cost-grant-value
+    # Distinct definitions: retain the historical total-cost grant-offset test
+    # under its legacy keys to avoid silently changing downstream scoring.
+    unsubsidized_value_cost_spread = value-net_cost
+    unsubsidized_value_cost_spread_pct = (unsubsidized_value_cost_spread/net_cost*100) if net_cost>0 else None
+    eligible_grant = min(grant,net_cost)  # Hypothetical eligible grant, NOT verified legal grant eligibility.
+    net_capital_cost = net_cost-eligible_grant
+    net_cost_margin_gap = net_capital_cost*(1+p.return_margin_pct/100)-value
+    gross_cost_margin_hurdle = net_cost*(1+p.return_margin_pct/100)-value
     private_debt=p.private_debt_m*1e6
     committed_equity=p.committed_equity_m*1e6
     capital_gap=net_cost-grant-loan-private_debt-committed_equity
@@ -102,6 +117,14 @@ def analyze(p: Inputs) -> dict:
         'annual_public_loan_payment':loan_ds,'residual_noi':noi-loan_ds,
         'residual_value':value, # legacy alias: unlevered, do not present as after-debt value
         'basic_gap':gap,'margin_gap':economic_gap,'economic_gap':economic_gap,
+        'legacy_total_cost_margin_gap':economic_gap,
+        'gross_cost_margin_hurdle':gross_cost_margin_hurdle,
+        'net_capital_cost_after_eligible_grant':net_capital_cost,
+        'grant_eligible_for_net_cost_screen':eligible_grant,
+        'grant_above_net_cost':max(0,grant-net_cost),
+        'net_cost_margin_gap':net_cost_margin_gap,
+        'unsubsidized_value_cost_spread':unsubsidized_value_cost_spread,
+        'unsubsidized_value_cost_spread_pct':unsubsidized_value_cost_spread_pct,
         'ds_coverage':coverage,'public_loan_dscr':coverage,'public_loan_supported':public_loan_supported,'financing_feasible':financing_feasible, 'public_loan_dscr_shortfall':max(0,loan_ds-noi/p.min_total_dscr),
         'private_debt':private_debt,'committed_equity':committed_equity,
         'capital_stack_gap':capital_gap,

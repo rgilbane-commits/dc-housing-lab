@@ -3,7 +3,7 @@ from unittest.mock import patch
 from live_data import (fetch_gis,fetch_acs,summarize_projects,DataUnavailable,CENTERS,
                        parse_census_value)
 class LiveDataTests(unittest.TestCase):
-    def test_three_neighborhoods(self):self.assertEqual(len(CENTERS),3)
+    def test_three_neighborhoods(self):self.assertGreaterEqual(len(CENTERS),8)
     def test_missing_units_not_zero_imputation(self):
         m=summarize_projects([{'OBJECTID':1,'TOTAL_AFFORDABLE_UNITS':30},{'OBJECTID':2,'TOTAL_AFFORDABLE_UNITS':None}])
         self.assertEqual((m['reported_unit_sum'],m['missing_units_rows']),(30,1))

@@ -16,7 +16,13 @@ GIS_FIELDS=('OBJECTID','PROJECT_NAME','PLANNING_AREA','STATUS_PUBLIC','TOTAL_AFF
 CENTERS={
  'Friendship Heights / Ward 3':(38.9593,-77.0847,'Rock Creek West'),
  'Columbia Heights / Ward 1':(38.9289,-77.0327,'Mid-City'),
- 'Congress Heights / Ward 8':(38.8437,-76.9889,'Far Southeast and Southwest')}
+ 'Congress Heights / Ward 8':(38.8437,-76.9889,'Far Southeast and Southwest'), 'Downtown / Ward 2':(38.8987,-77.028,'Central Washington'),
+ 'Takoma / Ward 4':(38.9734,-77.0171,'Rock Creek East'),
+ 'Brookland / Ward 5':(38.9323,-76.995,'Upper Northeast'),
+ 'Capitol Hill / Ward 6':(38.8864,-76.9958,'Capitol Hill'),
+ 'Deanwood / Ward 7':(38.8995,-76.9277,'Far Northeast and Southeast'),
+ 'Dupont Circle / Ward 2':(38.9096,-77.0434,'Near Northwest'),
+ 'Navy Yard / Ward 6':(38.874,-77.001,'Lower Anacostia Waterfront and Near Southwest')}
 
 class DataUnavailable(RuntimeError):
     pass
