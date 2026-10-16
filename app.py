@@ -23,6 +23,10 @@ from investment_strategy import AREAS, STRATEGIES, SUBSIDY_PER_HOME, Line, evalu
 from investment_feasibility import FundingAssumptions, assess_portfolio
 from scenario_compare import capture as capture_investment_scenario, compare as compare_investment_scenarios
 from geographic_visuals import qualified_chart_rows, map_marker_legend, area_quality_summary
+from financial_dashboard import render_financial_diagnostics
+from profitability_dashboard import render as render_profitability_studio
+from development_returns_dashboard import render as render_development_returns
+from geography_ui import sorted_reference_locations, area_rows
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
@@ -39,7 +43,7 @@ st.markdown("""<style>
 </style>""",unsafe_allow_html=True)
 
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v2.3.3 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v2.6.0 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -90,7 +94,7 @@ if 'baseline_values' not in st.session_state:
     st.session_state.baseline_values=neighborhood_inputs(st.session_state.neighborhood,st.session_state.scenario)
 
 st.sidebar.header('Choose your city')
-place=st.sidebar.selectbox('Neighborhood',list(NEIGHBORHOODS),key='neighborhood')
+place=st.sidebar.selectbox('Neighborhood reference point (ordered by ward)',sorted_reference_locations(NEIGHBORHOODS),key='neighborhood')
 scenario=st.sidebar.selectbox('Policy scenario',list(PRESETS),key='scenario')
 st.sidebar.caption(NEIGHBORHOODS[place]['tagline'])
 st.sidebar.caption('Reference locations are not ward boundaries. The geographic analysis uses official Comprehensive Plan planning areas.')
@@ -182,6 +186,9 @@ with workspaces[0]:
         st.warning('Additional equity is still required. Illustrated economic results do not constitute financing commitments.')
     if not r['meets_simple_test']:
         st.warning('Total-cost margin hurdle (including modeled grant) is not satisfied under the selected assumptions.')
+    render_financial_diagnostics(r, fm)
+    with st.expander('Sensitivity and profitability studio · 49-case matrix', expanded=False):
+        render_profitability_studio(p, fm)
     st.caption('Overview presents modeled estimates, not observed market transactions. Values are generated from the same financial model used by Development Studio.')
 
 with tabs[0]:
@@ -356,11 +363,12 @@ with tabs[2]:
     st.info('Do not subtract the 2018 inventory from the 2025 target: the former is a stock of existing homes and the latter is a goal for additional affordable homes. Neither is the number of currently available apartments.')
     st.markdown(f"[2019 Housing Equity Report]({ctx['source_url']}) · [July 2024 production announcement]({dc['source_url']})")
     st.markdown('#### Compare historical planning-area context')
-    dc_rows=[]
-    for neighborhood in NEIGHBORHOODS:
-        item=planning_area_context(neighborhood)
-        dc_rows.append({'Neighborhood (reference point)':neighborhood,'DC planning area':item['area'],'Existing affordable units (2018)':item['existing_2018'],'Goal for additional units by 2025 (set 2019)':item['target_2025']})
-    st.dataframe(pd.DataFrame(dc_rows).style.format({'Existing affordable units (2018)':'{:,.0f}','Goal for additional units by 2025 (set 2019)':'{:,.0f}'}),hide_index=True,use_container_width=True)
+    dc_rows=area_rows(NEIGHBORHOODS)
+    st.caption('One row per Comprehensive Plan planning area, alphabetical. These areas are not wards. “Not available” indicates an unverified historical figure, not zero.')
+    history_table=pd.DataFrame(dc_rows)
+    for numeric_col in ['Existing affordable units (2018)','Goal for additional units by 2025 (set 2019)']:
+        history_table[numeric_col]=history_table[numeric_col].map(lambda v: f'{v:,}' if v is not None else 'Not available')
+    st.dataframe(history_table,hide_index=True,use_container_width=True)
     with st.expander('Source register, observation periods and live-data links'):
         st.dataframe(pd.DataFrame(evidence_sources()),hide_index=True,use_container_width=True)
         st.caption('Links open official agency pages. Source dates are different; no live API results are represented as verified 2026 values.')
@@ -722,6 +730,9 @@ with tabs[7]:
         st.write(f"Year 11 projected NOI: {money(forecast['year_11_noi'])}; gross exit value: {money(forecast['sale_price']) if forecast['sale_price'] is not None else 'N/A'}; selling costs: {money(forecast['selling_cost']) if forecast['selling_cost'] is not None else 'N/A'}; loan balances repaid at sale: {money(forecast['ending_debt'])}.")
         st.write('Value = Year 11 NOI / exit cap rate. Net sale = gross sale price minus selling costs and outstanding public and private loan balances. IRR uses initial total required equity, ten annual operating cash flows, and net sale proceeds in Year 10. A negative net sale represents a residual obligation rather than a guaranteed equity distribution.')
         st.write('Loan amortization uses original balances and terms; maturity refinancing, balloon provisions, capital improvements beyond modeled reserves, income taxes, reinvestment, income-limit updates, tax credit compliance, and public-loan cash sweeps are not modeled. Restricted rent growth is a hypothetical assumption, not a statement of legally permitted increases. Multiple IRRs or nonconventional cash flows may require more detailed analysis.')
+
+    with st.expander('Development Returns & Capital Structure | Monthly Investment Model', expanded=False):
+        render_development_returns(p,r)
 
 
 with tabs[8]:
