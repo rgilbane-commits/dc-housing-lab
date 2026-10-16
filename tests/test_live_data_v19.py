@@ -14,6 +14,8 @@ class LiveDataTests(unittest.TestCase):
         with self.assertRaises(DataUnavailable):fetch_acs('Columbia Heights / Ward 1','')
     def test_gis_pages_and_fields(self):
         def fake_get(url,params,session=None,timeout=9):
+            if params.get('returnDistinctValues')=='true':return {'features':[{'attributes':{'PLANNING_AREA':'MID-CITY'}}]}
+            if params.get('returnCountOnly')=='true':return {'count':1}
             self.assertIn('PLANNING_AREA',params['where'])
             return {'features':[{'attributes':{'OBJECTID':1,'PLANNING_AREA':'Mid-City','TOTAL_AFFORDABLE_UNITS':23}}]}
         with patch('live_data.get_json',side_effect=fake_get):g=fetch_gis('Columbia Heights / Ward 1')

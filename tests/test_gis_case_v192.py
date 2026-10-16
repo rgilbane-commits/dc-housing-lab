@@ -5,6 +5,8 @@ from live_data import fetch_gis, DataUnavailable
 class GISCaseTests(unittest.TestCase):
     def test_uppercase_query_and_result(self):
         def fake(url,params,session=None,timeout=9):
+            if params.get('returnDistinctValues')=='true':return {'features':[{'attributes':{'PLANNING_AREA':'ROCK CREEK WEST'}}]}
+            if params.get('returnCountOnly')=='true':return {'count':1}
             self.assertEqual(params['where'], "PLANNING_AREA = 'ROCK CREEK WEST'")
             return {'features':[{'attributes':{'OBJECTID':1,'PLANNING_AREA':'ROCK CREEK WEST','TOTAL_AFFORDABLE_UNITS':44}}]}
         with patch('live_data.get_json',side_effect=fake):
@@ -13,6 +15,8 @@ class GISCaseTests(unittest.TestCase):
     def test_other_areas_uppercase(self):
         for neighborhood,expected in [('Columbia Heights / Ward 1','MID-CITY'),('Congress Heights / Ward 8','FAR SOUTHEAST AND SOUTHWEST')]:
             def fake(url,params,session=None,timeout=9):
+                if params.get('returnDistinctValues')=='true':return {'features':[{'attributes':{'PLANNING_AREA':expected}}]}
+                if params.get('returnCountOnly')=='true':return {'count':1}
                 self.assertIn(expected,params['where'])
                 return {'features':[{'attributes':{'OBJECTID':1,'PLANNING_AREA':expected,'TOTAL_AFFORDABLE_UNITS':10}}]}
             with patch('live_data.get_json',side_effect=fake):

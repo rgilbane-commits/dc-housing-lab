@@ -5,6 +5,8 @@ from live_data import fetch_gis, DataUnavailable
 class GISLiteralTests(unittest.TestCase):
     def test_congress_heights_uses_actual_source_literal(self):
         def reply(url,params,session=None,timeout=9):
+            if params.get('returnDistinctValues')=='true':return {'features':[{'attributes':{'PLANNING_AREA':'FAR SOUTHEAST AND SOUTHWEST'}}]}
+            if params.get('returnCountOnly')=='true':return {'count':1}
             self.assertEqual(params['where'], "PLANNING_AREA = 'FAR SOUTHEAST AND SOUTHWEST'")
             return {'features':[{'attributes':{'OBJECTID':3,'PLANNING_AREA':'FAR SOUTHEAST AND SOUTHWEST','TOTAL_AFFORDABLE_UNITS':81}}]}
         with patch('live_data.get_json',side_effect=reply):

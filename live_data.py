@@ -53,52 +53,76 @@ def summarize_projects(records):
     return {'project_count':len(records),'reported_unit_sum':int(round(sum(valid))),
             'reported_units_rows':len(valid),'missing_units_rows':len(records)-len(valid)}
 
+def normalize_area(value):
+    """Normalize typography only; never guess unrelated geographic names."""
+    import re
+    name = str(value or '').strip().upper().replace('&', ' AND ')
+    return ' '.join(re.sub(r'[^A-Z0-9]+', ' ', name).split())
+
+
+def discover_gis_areas(session=None):
+    """Read source literals rather than relying on application-supplied spelling."""
+    data = get_json(GIS_LAYER+'/query', {
+        'where':'1=1', 'outFields':'PLANNING_AREA', 'returnGeometry':'false',
+        'returnDistinctValues':'true', 'orderByFields':'PLANNING_AREA ASC',
+        'f':'json'}, session=session)
+    if not isinstance(data,dict) or not isinstance(data.get('features'),list):
+        raise DataUnavailable('Planning-area discovery response is invalid.')
+    if data.get('exceededTransferLimit'):
+        raise DataUnavailable('Planning-area discovery is incomplete (service transfer limit).')
+    values=sorted({str(item.get('attributes',{}).get('PLANNING_AREA') or '').strip()
+                   for item in data['features'] if isinstance(item,dict) and
+                   isinstance(item.get('attributes'),dict)})
+    values=[v for v in values if v]
+    if not values:raise DataUnavailable('No valid planning-area names discovered.')
+    return values
+
+
+def match_gis_area(target, source_values):
+    normalized=normalize_area(target)
+    matches=[v for v in source_values if normalize_area(v)==normalized]
+    if len(matches)!=1:
+        examples=', '.join(source_values[:8])
+        raise DataUnavailable(f'Cannot uniquely match planning area {target!r}; '
+                              f'matches={len(matches)}. Available source values: {examples}')
+    return matches[0]
+
+
 def fetch_gis(neighborhood, session=None, page_size=500, max_pages=20):
     if neighborhood not in CENTERS:raise ValueError('Unknown neighborhood')
-    area=CENTERS[neighborhood][2]
-    where="PLANNING_AREA = '"+area.upper().replace("'","''")+"'"
-    records=[]; asof=utc_now()
+    if page_size<1 or max_pages<1:raise ValueError('Invalid pagination limits')
+    requested_area=CENTERS[neighborhood][2]
+    source_values=discover_gis_areas(session=session)
+    area=match_gis_area(requested_area,source_values)
+    where="PLANNING_AREA = '"+area.replace("'","''")+"'"
+    count=get_json(GIS_LAYER+'/query',{'where':where,'returnCountOnly':'true','f':'json'},session=session)
+    if not isinstance(count,dict) or type(count.get('count')) is not int or count['count']<0:
+        raise DataUnavailable('GIS count response missing or invalid; refusing incomplete totals.')
+    expected=count['count'];records=[];asof=utc_now()
+    if expected>page_size*max_pages:
+        raise DataUnavailable('Project count exceeds pagination safety limit.')
     for page in range(max_pages):
+        if len(records)>=expected:break
         data=get_json(GIS_LAYER+'/query',{'where':where,'outFields':','.join(GIS_FIELDS),
-             'returnGeometry':'false','orderByFields':'OBJECTID ASC','resultOffset':page*page_size,
-             'resultRecordCount':page_size,'f':'json'},session=session)
+            'returnGeometry':'false','orderByFields':'OBJECTID ASC','resultOffset':page*page_size,
+            'resultRecordCount':min(page_size,expected-len(records)),'f':'json'},session=session)
         if not isinstance(data,dict) or not isinstance(data.get('features'),list):
-            raise DataUnavailable('GIS response missing expected features array.')
-        batch=[f.get('attributes',{}) for f in data['features']]
+            raise DataUnavailable('GIS page has no valid features array.')
+        batch=[f.get('attributes') if isinstance(f,dict) else None for f in data['features']]
         if not all(isinstance(r,dict) for r in batch):
-            raise DataUnavailable('Unexpected GIS response fields.')
+            raise DataUnavailable('GIS page contains invalid attributes.')
+        if not batch:raise DataUnavailable('GIS pagination terminated before expected project count.')
         records.extend(batch)
-        if len(batch)<page_size and not data.get('exceededTransferLimit'):break
-    else:
-        raise DataUnavailable('GIS pagination cap reached; incomplete data were not reported.')
-    if not records:
-        # A zero-row attribute filter is not evidence that the planning area has
-        # zero projects. Query the service independently and inspect its values.
-        # This prevents a schema/value mismatch from being published as a fact.
-        observed=set()
-        for fallback_page in range(max_pages):
-            sample=get_json(GIS_LAYER+'/query',{'where':'1=1',
-                 'outFields':'OBJECTID,PLANNING_AREA', 'returnGeometry':'false',
-                 'orderByFields':'OBJECTID ASC', 'resultOffset':fallback_page*page_size,
-                 'resultRecordCount':page_size,'f':'json'},session=session)
-            if not isinstance(sample,dict) or not isinstance(sample.get('features'),list):
-                raise DataUnavailable('Unable to validate zero result: GIS fallback query failed.')
-            batch=sample['features']
-            observed.update(str(f.get('attributes',{}).get('PLANNING_AREA') or '').strip()
-                            for f in batch if isinstance(f.get('attributes'),dict))
-            if len(batch)<page_size and not sample.get('exceededTransferLimit'):
-                break
-        else:
-            raise DataUnavailable('Unable to verify empty planning-area result: GIS fallback pagination incomplete.')
-        if not observed or observed == {''}:
-            raise DataUnavailable('GIS returned no usable planning-area values; zero project count cannot be verified.')
-        examples=', '.join(sorted(v for v in observed if v)[:5])
-        raise DataUnavailable('No GIS records matched '+repr(area)+
-            '. This may be a planning-area naming mismatch or a true zero; '
-            'zero is NOT verified. Source values include: '+examples)
-    if any(str(r.get('PLANNING_AREA') or '').strip().casefold() != area.casefold() for r in records):
+    if len(records)!=expected:
+        raise DataUnavailable(f'GIS incomplete: expected {expected} projects, received {len(records)}.')
+    if any(normalize_area(r.get('PLANNING_AREA'))!=normalize_area(area) for r in records):
         raise DataUnavailable('GIS planning-area mismatch; results rejected.')
-    return {'status':'live','area':area,'retrieved_at':asof,'rows':records,'metrics':summarize_projects(records)}
+    metrics=summarize_projects(records)
+    return {'status':'live_verified' if expected else 'verified_zero', 'area':area,
+            'requested_area':requested_area,'retrieved_at':asof,'rows':records,
+            'metrics':metrics,'expected_count':expected,
+            'source_area_values':source_values,
+            'data_quality':('partial_units' if metrics['missing_units_rows'] else 'complete_units')}
 
 def parse_census_value(value):
     try:
