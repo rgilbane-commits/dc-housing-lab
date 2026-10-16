@@ -14,13 +14,16 @@ from student_report import create_student_pdf
 from forecast import ForecastAssumptions, project
 from public_policy import PublicPolicyAssumptions, evaluate
 from evidence import planning_area_context, district_production, records as evidence_sources
-from live_data import fetch_gis, fetch_acs, census_key, DataUnavailable, GIS_LAYER, ACS_BASE
+from live_data import fetch_gis, fetch_acs, census_key, DataUnavailable, GIS_LAYER, ACS_BASE, normalize_area
 from geo_policy import boundary_geometry, planning_map, PLANNING_LAYER
+from housing_intelligence import analyze_area, comparison_rows
+from geo_denominators import retrieve as retrieve_denominators, DenominatorUnavailable
+from investment_strategy import AREAS, STRATEGIES, SUBSIDY_PER_HOME, Line, evaluate as evaluate_investment
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v2.0.1 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v2.2.0 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -127,7 +130,7 @@ if presentation:
       [data-testid="stMetricValue"]{font-size:2.1rem!important}
     </style>""",unsafe_allow_html=True)
     st.caption('Projector tip: press F11 in your browser for true full-screen; toggle this switch off to restore inputs.')
-tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes','📈 Ten-year outlook','🏛️ Public subsidy efficiency'])
+tabs=st.tabs(['🎓 Instructor view','🏗️ Build a project','🏛️ Policy lab','👨‍👩‍👧‍👦 Who can afford it?','🏆 Classroom challenge','📊 Stress test & compare','📖 Model & teaching notes','📈 Ten-year outlook','🏛️ Public subsidy efficiency','💼 Public investment strategy'])
 with tabs[0]:
     st.subheader(f'Your development: {place}')
     a,b,c,d=st.columns(4)
@@ -350,6 +353,81 @@ with tabs[2]:
         st.dataframe(pd.DataFrame(comparison),hide_index=True,use_container_width=True)
         st.download_button('Download sourced planning-area comparison (CSV)',pd.DataFrame(comparison).to_csv(index=False).encode('utf-8'),file_name='DC_Planning_Areas_Live_Comparison.csv',mime='text/csv')
         st.caption('These are area-wide counts from one public layer and are NOT normalized by population, total housing inventory, or land area. Unit counts are sums of reported fields, not net additions or currently available units.')
+    st.divider()
+    st.subheader('Geographic Housing Intelligence | production and preservation')
+    st.caption('Planning-area analysis based solely on GIS-recorded projects started or completed since 2015. Missing fields are NOT treated as zero. This is not net additions, current inventory, or measured housing need.')
+    if st.button('Analyze all three planning areas',key='v21_intelligence_refresh'):
+        analyzed=[]; failures=[]
+        for n in NEIGHBORHOODS:
+            try:analyzed.append(cached_gis(n))
+            except (DataUnavailable, ValueError) as exc:failures.append(f'{n}: {exc}')
+        st.session_state['v21_evidence'] = analyzed
+        st.session_state['v21_evidence_failures'] = failures
+    if st.session_state.get('v21_evidence_failures'):
+        for err in st.session_state['v21_evidence_failures']:st.warning('Source unavailable: '+err)
+    if st.session_state.get('v21_evidence'):
+        evidence=st.session_state['v21_evidence']
+        summaries=[]
+        for result in evidence:
+            try:summaries.append(analyze_area(result))
+            except DataUnavailable as exc:st.warning(f'Unverified source: {exc}')
+        if summaries:
+            st.markdown('**Reported project counts and production / preservation (source-limited)**')
+            show=[]
+            for a in summaries:
+                show.append({'Planning area':a['area'],'Projects':a['projects'],
+                    'Production units (reported subset)':a['production_units_reported'] if a['production_rows'] else None,
+                    'Preserved units (reported subset)':a['preservation_units_reported'] if a['preservation_rows'] else None,
+                    'Production field populated':f"{a['production_rows']}/{a['projects']}",
+                    'Preservation field populated':f"{a['preservation_rows']}/{a['projects']}",
+                    'Inconsistent records':a['inconsistent_rows'],
+                    'Quality':'Fully classified' if a['fully_classified'] else 'Partial / review required'})
+            st.dataframe(pd.DataFrame(show),hide_index=True,use_container_width=True)
+            st.caption('Production and preservation sums are NOT additive unless the source classification is complete and internally consistent. Project status and fields may overlap. Areas cannot be ranked by housing need without comparable denominators.')
+            st.markdown('**Geographic opportunity / normalization**')
+            st.info('No verified planning-area household denominator is bundled with this release. Per-1,000-household measures are intentionally unavailable. A single Census tract is not a valid planning-area denominator. Historical production alone cannot establish future opportunity or housing need.')
+            st.markdown('**Planning-area household and housing-stock denominators (experimental)**')
+            st.caption('2024 ACS 5-year tract estimates, area-weighted to official DC planning-area polygons. These are approximations, not directly published planning-area counts. Requires a Census API key; no data is fabricated when unavailable.')
+            if st.button('Calculate approximate planning-area denominators',key='v211_denominator_load'):
+                try:
+                    api_key=st.secrets.get('CENSUS_API_KEY','')
+                except (FileNotFoundError,KeyError):
+                    api_key=''
+                results={}; errors={}
+                for n in NEIGHBORHOODS:
+                    try:
+                        boundary=boundary_geometry(n)
+                        results[boundary['name']]=retrieve_denominators(api_key,boundary)
+                    except (DenominatorUnavailable,DataUnavailable,ValueError) as exc:
+                        errors[n]=str(exc)
+                st.session_state['v211_denominators']=results
+                st.session_state['v211_denominator_errors']=errors
+            for area,error in st.session_state.get('v211_denominator_errors',{}).items():
+                st.warning(f'{area}: approximate denominator unavailable: {error}')
+            denom=st.session_state.get('v211_denominators',{})
+            if denom:
+                normalized=[]
+                for a in summaries:
+                    d=next((v for k,v in denom.items() if normalize_area(k)==normalize_area(a['area'])),None)
+                    if d is None:continue
+                    complete=a['fully_classified']
+                    normalized.append({'Planning area':a['area'],
+                        'Estimated households (area-weighted)':round(d['households_est']),
+                        'Estimated housing units (area-weighted)':round(d['housing_units_est']),
+                        'Housing production / 1,000 households':round(1000*a['production_units_reported']/d['households_est'],2) if complete else None,
+                        'Housing production / 1,000 existing units':round(1000*a['production_units_reported']/d['housing_units_est'],2) if complete else None,
+                        'GIS classification complete':complete,'Polygon coverage':f"{d['coverage']:.1%}",
+                        'Tracts intersected':d['tracts_intersected'],'ACS vintage':d['year'],
+                        'Households ACS MOE proxy (90%, not a valid full CI)':round(d['households_moe_90_proxy']) if d.get('households_moe_90_proxy') is not None else None,
+                        'Housing units ACS MOE proxy (90%, not a valid full CI)':round(d['housing_units_moe_90_proxy']) if d.get('housing_units_moe_90_proxy') is not None else None,
+                        'Interpolation error quantified':False})
+                if normalized:
+                    st.dataframe(pd.DataFrame(normalized),hide_index=True,use_container_width=True)
+                    st.download_button('Download qualified area-weighted denominators (CSV)',pd.DataFrame(normalized).to_csv(index=False).encode('utf-8'),file_name='DC_Area_Weighted_Denominators_v2_1_2.csv',mime='text/csv',key='v211_export')
+                st.caption('Numerator: GIS-reported units in projects since 2015; denominator: 2024 ACS estimated households or housing units. This is a cross-vintage intensity measure, NOT current affordable housing share, net growth, or need. Area-weighting introduces unquantified interpolation error. An approximate root-sum-square aggregation of ACS 90% margins of error is shown when available, but it is NOT a valid full planning-area confidence interval.')
+            st.markdown('**Source freshness & audit trail**')
+            st.dataframe(pd.DataFrame([{'Planning area':a['area'],'Retrieved UTC':a['retrieved_at'],'Source status':a['source_status'],'Complete unit classification':a['fully_classified']} for a in summaries]),hide_index=True,use_container_width=True)
+            st.download_button('Download qualified geographic comparison (CSV)',pd.DataFrame(show).to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Intelligence_v2_1_2.csv',mime='text/csv',key='v21_export')
     st.divider()
     st.subheader('Three public policy levers')
     st.write('Use the sidebar to change each intervention, or use the buttons below to apply the policies directly.')
@@ -586,3 +664,40 @@ with tabs[8]:
         for caution in policy['cautions']:st.write('• '+caution)
         st.write('How should the District evaluate fewer deeply affordable units against more moderately restricted units? How should the public value of contributed land be counted? What if the borrower cannot repay the loan?')
         st.write('A 30-year restriction is assumed if selected; the application does not verify a legally binding agreement. Comparing programs also requires incomes served, persistence, displacement avoided, location, and quality—not just cost per unit.')
+
+with tabs[9]:
+    st.subheader('$100 million | Public Investment Strategy')
+    st.info('Illustrative allocation simulator. All per-home public support assumptions are hypothetical. GIS and Census evidence is contextual and does not automatically determine housing yield.')
+    st.caption('Amounts entered are public grants/equivalent capital support, not complete development cost. The model does not assume that a repayable loan is equivalent to a grant.')
+    budget=100.0
+    st.markdown('#### Allocate budget by geography and strategy')
+    lines=[]
+    for area in AREAS:
+        with st.expander(area,expanded=(area==AREAS[0])):
+            for strategy in STRATEGIES:
+                prefix='inv_'+str(AREAS.index(area))+'_'+str(STRATEGIES.index(strategy))
+                c1,c2=st.columns([1,1])
+                amount=c1.number_input(strategy+' allocation ($M)',min_value=0.0,max_value=100.0,value=0.0,step=5.0,key=prefix+'_allocation')
+                support=c2.number_input(strategy+' assumed subsidy / home ($)',min_value=10000.0,max_value=2000000.0,value=SUBSIDY_PER_HOME[strategy],step=5000.0,key=prefix+'_support')
+                lines.append(Line(area,strategy,amount,support))
+    allocated=sum(item.allocation_m for item in lines)
+    c1,c2,c3=st.columns(3)
+    c1.metric('Budget', '$100.0M');c2.metric('Allocated',money(allocated*1e6,compact=True));c3.metric('Unallocated / over',money((budget-allocated)*1e6,compact=True))
+    st.progress(min(allocated/budget,1.0))
+    if allocated>budget+1e-8:
+        st.error('Overallocated by '+money((allocated-budget)*1e6)+'. Reduce allocations to calculate outcomes.')
+    else:
+        results=evaluate_investment(lines,budget)
+        st.metric('Illustrative housing capacity (NOT delivered homes)',integer(results['potential_capacity']))
+        if allocated<budget:st.warning('Budget is not fully allocated; results represent only allocated capital.')
+        st.warning('Capital, operating and eligibility approvals have not been evidenced. Delivered homes = 0; potential capacity is not an approval or production forecast.')
+        df=pd.DataFrame(results['lines'])
+        df=df[df['allocation_m']>0]
+        if not df.empty:
+            st.dataframe(df[['planning_area','strategy','allocation_m','assumed_support_per_home','illustrative_home_capacity','unassigned_fractional_budget']].rename(columns={'planning_area':'Planning area','strategy':'Strategy','allocation_m':'Allocation ($M)','assumed_support_per_home':'Assumed support/home ($)','illustrative_home_capacity':'Potential homes (illustrative)','unassigned_fractional_budget':'Remainder ($)'}).style.format({'Allocation ($M)':'${:,.1f}','Assumed support/home ($)':'${:,.0f}','Potential homes (illustrative)':'{:,.0f}','Remainder ($)':'${:,.0f}'}),use_container_width=True)
+            st.download_button('Download investment allocation and assumptions (CSV)',df.to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v2_2_0_investment_allocation.csv',mime='text/csv',key='inv_export')
+        st.caption('Illustrative capacity uses integer floor of allocated grant-equivalent support divided by assumed per-home contribution. No project-specific financing, operating support, environmental, zoning, or legal covenant approvals are implied.')
+    st.markdown('#### Methodology and safeguards')
+    with st.expander('What does the investment simulator measure?'):
+        st.write('Per-home subsidy parameters are adjustable instructional inputs, not sourced market quotes. A result of 100 potential homes means the assumed public contribution could theoretically support that many units, subject to independent project-level feasibility tests. It does not mean those homes are funded, committed, built or preserved. Production and preservation outputs are reported separately; no false conversion between them is implied.')
+        st.write('Public loan proceeds are omitted from this first release. Estimating economic public support for repayable loans requires a separate term-based present-value calculation and repayment risk assessment, available in the existing Public subsidy efficiency tab.')
