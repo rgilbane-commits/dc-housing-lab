@@ -33,6 +33,22 @@ def render(p,r):
     except ValueError as exc:
         st.error(f'Monthly investment scenario unavailable: {exc}')
         return
+    # The v2.7.1+ dashboard and returns calculation must be deployed together.
+    # An older deployed development_returns.py lacks the metrics below; refuse
+    # to display a partially compatible result instead of raising KeyError.
+    required_metrics = ('operating_deficit_total', 'operating_deficit_months',
+                        'refinance_equity_call', 'levered_irr', 'equity_multiple',
+                        'construction_interest', 'net_sale_to_equity', 'warning',
+                        'minimum_operating_cash', 'financing_screen_passed', 'rows')
+    missing_metrics = [key for key in required_metrics if key not in result]
+    if missing_metrics:
+        st.error('Development Returns version mismatch: the deployed returns engine '
+                 'does not supply the metrics required by this dashboard. '
+                 'Replace BOTH development_returns.py and '
+                 'development_returns_dashboard.py from the same v2.7.3 release, '
+                 'then reboot the Streamlit app. Missing: '
+                 + ', '.join(missing_metrics))
+        return
     def millions(value):return f'${value/1e6:,.2f}M' if value is not None else 'N/A'
     d1,d2,d3,d4=st.columns(4)
     d1.metric('Levered annualized IRR',f"{result['levered_irr']*100:.1f}%" if result['levered_irr'] is not None else 'N/A')
