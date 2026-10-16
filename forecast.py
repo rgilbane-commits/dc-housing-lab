@@ -68,17 +68,18 @@ def project(p,r,a=ForecastAssumptions()):
            'total_debt_service':public_ds+private_ds,'cash_flow_to_equity':cash_flow,
            'public_balance':public_balance,'private_balance':private_balance,
            'dscr': noi/(public_ds+private_ds) if public_ds+private_ds>0 else None})
-    sale_price=next_noi/(a.exit_cap_pct/100)
-    selling_cost=sale_price*a.selling_cost_pct/100
+    terminal_value_available=next_noi>0
+    sale_price=next_noi/(a.exit_cap_pct/100) if terminal_value_available else None
+    selling_cost=sale_price*a.selling_cost_pct/100 if terminal_value_available else None
     ending_debt=rows[-1]['public_balance']+rows[-1]['private_balance']
-    net_sale=sale_price-selling_cost-ending_debt
+    net_sale=sale_price-selling_cost-ending_debt if terminal_value_available else None
     equity=r['equity_required']
     flows=[-equity]+[row['cash_flow_to_equity'] for row in rows]
-    flows[-1]+=net_sale
+    if terminal_value_available:flows[-1]+=net_sale
     return {'rows':rows,'sale_price':sale_price,'selling_cost':selling_cost,'ending_debt':ending_debt,
-       'net_sale_to_equity':net_sale,'year_11_noi':next_noi,'initial_equity':equity,
-       'equity_multiple':sum(flows[1:])/equity if equity>0 else None,
-       'equity_irr':_irr(flows) if equity>0 else None,'investor_cash_flows':flows,
+       'net_sale_to_equity':net_sale,'terminal_value_available':terminal_value_available,'year_11_noi':next_noi,'initial_equity':equity,
+       'equity_multiple':sum(flows[1:])/equity if equity>0 and terminal_value_available else None,
+       'equity_irr':_irr(flows) if equity>0 and terminal_value_available else None,'investor_cash_flows':flows,
        'cumulative_operating_cash':sum(x['cash_flow_to_equity'] for x in rows),
        'minimum_cash_flow':min(x['cash_flow_to_equity'] for x in rows),
        'expense_growth_exceeds_restricted_growth':a.expense_inflation_pct>a.restricted_growth_pct}

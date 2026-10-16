@@ -94,13 +94,15 @@ def analyze(p: Inputs) -> dict:
     for name,amount in [('DSCR',private_by_dscr),('LTV',private_by_ltv),('LTC',private_by_ltc)]:
         if abs(amount-private_capacity)<0.01:binding.append(name)
     coverage=noi/loan_ds if loan_ds else None
+    public_loan_supported=(loan_ds <= noi/p.min_total_dscr + 1e-7)
+    financing_feasible=public_loan_supported and (total_ds<=noi/p.min_total_dscr+1e-7) and unfunded_equity<=0.01 and excess_sources<=0.01
     return {**asdict(p),'restricted_units':restricted,'market_units':p.units-restricted,
         'gross_rent':gross,'egi':egi,'noi':noi,'stabilized_value':value,'gross_cost':gross_cost,
         'land_credit':land_credit,'net_cost':net_cost,'grant':grant,'loan':loan,
         'annual_public_loan_payment':loan_ds,'residual_noi':noi-loan_ds,
         'residual_value':value, # legacy alias: unlevered, do not present as after-debt value
         'basic_gap':gap,'margin_gap':economic_gap,'economic_gap':economic_gap,
-        'ds_coverage':coverage,'public_loan_dscr':coverage,
+        'ds_coverage':coverage,'public_loan_dscr':coverage,'public_loan_supported':public_loan_supported,'financing_feasible':financing_feasible, 'public_loan_dscr_shortfall':max(0,loan_ds-noi/p.min_total_dscr),
         'private_debt':private_debt,'committed_equity':committed_equity,
         'capital_stack_gap':capital_gap,
         'private_debt_capacity':private_capacity,

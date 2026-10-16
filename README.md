@@ -1,24 +1,26 @@
-# DC Housing Lab v1.9.4 — GIS Reliability Release
+# DC Housing Lab v2.0.1 - Audit remediation
 
-Upload all files and the `tests/` folder into the root of your existing GitHub repository, replacing matching files. Streamlit continues to start from `app.py`. Financial model files are retained.
+Deploy: extract this package into the root of the existing GitHub repository and commit to the Streamlit-connected branch. Ensure `geo_policy.py`, `live_data.py`, `model.py`, `forecast.py`, `app.py`, and `requirements.txt` are updated together. A new dependency, Shapely, is installed via `requirements.txt`.
 
-## Improvements
-- Discovers the GIS layer's actual distinct `PLANNING_AREA` values before querying.
-- Normalizes case, whitespace, punctuation, and `&` versus `AND`; refuses unmatched or ambiguous geography.
-- Uses the exact returned source value for the filter.
-- Requests an independent server count and verifies that all paginated records were received.
-- Rejects duplicates, wrong-geography rows, malformed responses, and incomplete pagination.
-- Reports missing affordable-unit counts as missing; no implicit zeros.
-- Shows status, retrieval time, reported-unit completeness, and reconciliation count.
-- Preserves optional Census functionality, source links, and hypothetical underwriting.
+## Corrections
+- Topology-aware GIS planning-area GeoJSON preserving exterior rings, holes, and multipart areas.
+- Boundary record fetched by source OBJECTID with exact count check. The neighborhood reference point must fall in the returned polygon.
+- Project markers must fall inside their assigned polygon; any spatial mismatch suppresses the entire geospatial map rather than silently dropping rows.
+- Public loan feasibility evaluated against minimum total DSCR; loan request is not silently represented as approved financing.
+- Negative/zero Year 11 NOI makes income-capitalization terminal valuation and associated sale-based equity returns unavailable.
+- Whole nonnegative unit count validation; GIS pre/post page count reconciliation to flag changing result sets.
 
-## Deploy / smoke test
-1. Upload extracted contents to `rgilbane-commits/dc-housing-lab` and commit on `main`.
-2. Visit the existing Streamlit app; hard refresh. Confirm v1.9.4 in UI.
-3. Choose Friendship Heights, Columbia Heights, and Congress Heights, refreshing each time in Policy Lab.
-4. Confirm planning-area names and source count vs loaded records. When data fail, check for a warning rather than a green zero.
-5. Re-test density bonus, capital stack, waterfall, and student PDF download.
-6. Keep v1.9.3 as a rollback release until hosted live verification succeeds.
+## Remaining limitations
+- The public loan principal entered is still a requested assumption; it is not automatically capped to a lender-approved amount. The app explicitly flags unsupported configurations.
+- Count-before/count-after detects count changes, but not record replacements that leave the same count. No transactional GIS snapshot is available.
+- Live GIS, map tile, and Streamlit browser testing is still REQUIRED after deployment. 166 source and mocked-service tests passed locally; that is not production approval.
+- This tool is educational and is not suitable for authoritative siting, policy allocation, or investment underwriting.
 
-## Requirements and limitations
-No new Python dependencies. The GIS endpoint must support ArcGIS REST distinct-value and count queries. Live service behavior and deployed Streamlit/browser rendering could not be verified from this environment. Results are planning-area projects, not current affordable housing inventory or neighborhood-only homes. Census results are for a single tract containing the map reference point. No API key is needed for the GIS endpoint; the Census API requires separately configured credentials.
+## Required live acceptance
+1. Select each of the 3 neighborhoods and open the live geospatial map.
+2. Confirm correct boundary and project markers; inspect warnings for spatial mismatches.
+3. Test GIS outage and map tile unavailability.
+4. Enter an excessively large public loan and confirm financing warning.
+5. Force negative Year 11 NOI using adverse growth assumptions; verify N/A exit and IRR.
+6. Test the density-bonus callback, capital stack, CSV export, PDF export, and mobile/projector layouts.
+7. Verify that the deployed Git commit corresponds to the release files.

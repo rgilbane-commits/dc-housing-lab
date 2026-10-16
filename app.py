@@ -15,11 +15,12 @@ from forecast import ForecastAssumptions, project
 from public_policy import PublicPolicyAssumptions, evaluate
 from evidence import planning_area_context, district_production, records as evidence_sources
 from live_data import fetch_gis, fetch_acs, census_key, DataUnavailable, GIS_LAYER, ACS_BASE
+from geo_policy import boundary_geometry, planning_map, PLANNING_LAYER
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.9.4 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v2.0.1 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -142,6 +143,10 @@ with tabs[0]:
     for message in tradeoff_messages(p,st.session_state.baseline_values):st.info(message)
     st.markdown('### Three quick experiments')
     st.write('**1. Raise affordability to 80%.** Why do revenue and value change? **2. Raise allowable density.** Does it always help? **3. Add a grant, then replace it with a repayable loan.** Why are the outcomes different?')
+    if not r['public_loan_supported']:
+        st.error('Requested public loan exceeds supportable DSCR capacity; not a feasible financing structure. Loan proceeds are shown as requested only.')
+    if r['excess_financing_sources']>0:
+        st.warning('Requested sources exceed project uses; capital structure must be revised.')
     if r['meets_simple_test']:st.success('✓ The modeled value covers cost plus the illustrative required margin. Not a financing approval.')
     else: st.warning('The project does not reach the illustrative required margin. Try changing the plan or policy.')
     st.write('**Ask:** Is it more equitable to build fewer deeply affordable units in a high-opportunity neighborhood, or more units elsewhere?')
@@ -315,6 +320,37 @@ with tabs[2]:
     except (DataUnavailable,ValueError) as exc:
         st.warning(f'ACS unavailable or unverified: {exc}. No tract value is shown.')
     st.divider()
+    st.subheader('Geospatial policy analysis | official planning-area boundary & project locations')
+    st.caption('Optional live map. Source polygons are DC Comprehensive Plan PLANNING AREAS, not neighborhood or ward boundaries. Project markers represent qualifying affordable housing projects started or completed since 2015, not vacancies or currently available units.')
+    if st.checkbox('Load official boundary and GIS project markers',value=False,key='show_geospatial_policy'):
+        @st.cache_data(ttl=86400,show_spinner=False)
+        def cached_boundary(name):
+            return boundary_geometry(name)
+        try:
+            boundary=cached_boundary(place)
+            projects=cached_gis(place)
+            points,missing=planning_map(place,boundary,projects)
+            st.caption(f"Boundary: {boundary['name']} | retrieved {boundary['retrieved_at']} UTC. Projects: {projects['metrics']['project_count']:,} verified source rows; {points:,} valid location markers; {missing:,} records without usable coordinates. Project source retrieved {projects['retrieved_at']} UTC.")
+            st.markdown(f'[Official planning-area boundary layer]({PLANNING_LAYER}) | [Official housing project layer]({GIS_LAYER})')
+            if missing: st.warning('Not all source projects have valid coordinates. Map dots cannot be used as an exhaustive project-location inventory.')
+        except Exception as exc:
+            st.warning(f'Geospatial data not verified: {exc}. No boundary or project markers shown; underwriting is unaffected.')
+    st.markdown('#### Compare the three planning areas (live, when available)')
+    if st.button('Fetch planning-area comparison',key='fetch_three_areas'):
+        comparison=[]
+        for geo_name in NEIGHBORHOODS:
+            try:
+                result=cached_gis(geo_name)
+                comparison.append({'Reference neighborhood':geo_name,'Official planning area':result['area'], 'Projects since 2015':result['metrics']['project_count'],'Reported affordable units':result['metrics']['reported_unit_sum'],'Missing unit rows':result['metrics']['missing_units_rows'],'Status':result['status'],'Retrieved UTC':result['retrieved_at']})
+            except (DataUnavailable,ValueError) as exc:
+                comparison.append({'Reference neighborhood':geo_name,'Official planning area':'Unavailable','Projects since 2015':None,'Reported affordable units':None,'Missing unit rows':None,'Status':str(exc),'Retrieved UTC':''})
+        st.session_state['v20_area_comparison']=comparison
+    if st.session_state.get('v20_area_comparison'):
+        comparison=st.session_state['v20_area_comparison']
+        st.dataframe(pd.DataFrame(comparison),hide_index=True,use_container_width=True)
+        st.download_button('Download sourced planning-area comparison (CSV)',pd.DataFrame(comparison).to_csv(index=False).encode('utf-8'),file_name='DC_Planning_Areas_Live_Comparison.csv',mime='text/csv')
+        st.caption('These are area-wide counts from one public layer and are NOT normalized by population, total housing inventory, or land area. Unit counts are sums of reported fields, not net additions or currently available units.')
+    st.divider()
     st.subheader('Three public policy levers')
     st.write('Use the sidebar to change each intervention, or use the buttons below to apply the policies directly.')
     x,y,z=st.columns(3)
@@ -484,9 +520,13 @@ with tabs[7]:
     forecast=project(p,r,a)
     x1,x2,x3,x4=st.columns(4)
     x1.metric('Year 10 NOI',fm(forecast['rows'][-1]['noi']))
-    x2.metric('Net sale to equity',fm(forecast['net_sale_to_equity']))
+    x2.metric('Net sale to equity',fm(forecast['net_sale_to_equity']) if forecast['terminal_value_available'] else 'N/A')
     x3.metric('Equity multiple',f"{forecast['equity_multiple']:.2f}×" if forecast['equity_multiple'] is not None else 'N/A')
     x4.metric('10-year equity IRR',f"{forecast['equity_irr']*100:.1f}%" if forecast['equity_irr'] is not None else 'N/A')
+    if not forecast['terminal_value_available']:
+        st.error('Year 11 NOI is zero or negative; income-capitalization exit value and sale-based investor returns are unavailable. A separate valuation and restructuring analysis is necessary.')
+    if not r['public_loan_supported']:
+        st.error('Requested public loan debt service exceeds the permitted DSCR capacity. This capital stack is NOT financing-feasible.')
     if forecast['expense_growth_exceeds_restricted_growth']:
         st.warning('Expense inflation exceeds restricted rent growth. This can compress operating margins, especially as the affordable housing share increases.')
     if forecast['minimum_cash_flow']<0:
@@ -502,7 +542,7 @@ with tabs[7]:
     st.dataframe(output.style.format({c:money for c in output.columns if c.endswith('($)')}),use_container_width=True,hide_index=True)
     st.download_button('Download ten-year forecast (CSV)',output.to_csv(index=False).encode('utf-8'),file_name='dc_housing_lab_10_year_forecast.csv',mime='text/csv')
     with st.expander('Disposition method, investor returns and model limitations'):
-        st.write(f"Year 11 projected NOI: {money(forecast['year_11_noi'])}; gross exit value: {money(forecast['sale_price'])}; selling costs: {money(forecast['selling_cost'])}; loan balances repaid at sale: {money(forecast['ending_debt'])}.")
+        st.write(f"Year 11 projected NOI: {money(forecast['year_11_noi'])}; gross exit value: {money(forecast['sale_price']) if forecast['sale_price'] is not None else 'N/A'}; selling costs: {money(forecast['selling_cost']) if forecast['selling_cost'] is not None else 'N/A'}; loan balances repaid at sale: {money(forecast['ending_debt'])}.")
         st.write('Value = Year 11 NOI / exit cap rate. Net sale = gross sale price minus selling costs and outstanding public and private loan balances. IRR uses initial total required equity, ten annual operating cash flows, and net sale proceeds in Year 10. A negative net sale represents a residual obligation rather than a guaranteed equity distribution.')
         st.write('Loan amortization uses original balances and terms; maturity refinancing, balloon provisions, capital improvements beyond modeled reserves, income taxes, reinvestment, income-limit updates, tax credit compliance, and public-loan cash sweeps are not modeled. Restricted rent growth is a hypothetical assumption, not a statement of legally permitted increases. Multiple IRRs or nonconventional cash flows may require more detailed analysis.')
 

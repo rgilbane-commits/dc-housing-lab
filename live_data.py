@@ -12,7 +12,7 @@ GIS_LAYER='https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_an
 ACS_BASE='https://api.census.gov/data/2024/acs/acs5'
 GEOCODER='https://geocoding.geo.census.gov/geocoder/geographies/coordinates'
 GIS_FIELDS=('OBJECTID','PROJECT_NAME','PLANNING_AREA','STATUS_PUBLIC','TOTAL_AFFORDABLE_UNITS',
-            'AFFORDABLE_UNITS_PRODUCTION','AFFORDABLE_UNITS_PRESERVED','GIS_LAST_MOD_DTTM')
+            'AFFORDABLE_UNITS_PRODUCTION','AFFORDABLE_UNITS_PRESERVED','GIS_LAST_MOD_DTTM','LATITUDE','LONGITUDE')
 CENTERS={
  'Friendship Heights / Ward 3':(38.9593,-77.0847,'Rock Creek West'),
  'Columbia Heights / Ward 1':(38.9289,-77.0327,'Mid-City'),
@@ -39,7 +39,7 @@ def clean_count(value):
     if value is None or value == '':return None
     try:
         x=float(value)
-        return x if x>=0 and x==x else None
+        return int(x) if x>=0 and x==x and x.is_integer() else None
     except (TypeError,ValueError): return None
 
 def summarize_projects(records):
@@ -113,6 +113,9 @@ def fetch_gis(neighborhood, session=None, page_size=500, max_pages=20):
             raise DataUnavailable('GIS page contains invalid attributes.')
         if not batch:raise DataUnavailable('GIS pagination terminated before expected project count.')
         records.extend(batch)
+    final_count=get_json(GIS_LAYER+'/query',{'where':where,'returnCountOnly':'true','f':'json'},session=session)
+    if not isinstance(final_count,dict) or final_count.get('count')!=expected:
+        raise DataUnavailable('GIS count changed during pagination; refusing inconsistent snapshot.')
     if len(records)!=expected:
         raise DataUnavailable(f'GIS incomplete: expected {expected} projects, received {len(records)}.')
     if any(normalize_area(r.get('PLANNING_AREA'))!=normalize_area(area) for r in records):

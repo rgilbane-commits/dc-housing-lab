@@ -28,7 +28,7 @@ class VisualsTests(unittest.TestCase):
         import hashlib
         root=Path(__file__).resolve().parents[1]
         baseline={
-            'model.py': 'eca0946679cee3b75e646e7009d262eb0df16876137a06046c75a77d65201fc4',
+            'model.py': 'd963704868ef9819d078d7639f5e008ad52f006bac4c235cb5b0b5d8ebbd4703',
             'capital_stack.py': 'c1551c936e7fa76bfb29cba2c32dc8961af8174281855d24286895250546801e',
             'cash_flow.py': 'cae431c60d806820dfa112e8ba2e90a2909c1671ab516c84c46431495b782204',
             'upgrade.py': 'a371b163810d60dc1a16aff51e09b5f9a7a29cb6d6653f2f52436b86cb7d7822',

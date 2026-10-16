@@ -1,0 +1,15 @@
+Finding ID,Severity,Builder disposition (not independently closed)
+GEO-001,HIGH,Builder patched; independent re-verification pending
+GEO-002,HIGH,Builder patched; live geometry confirmation pending
+GEO-003,HIGH,Builder patched; live count confirmation pending
+FIN-001,HIGH,Mitigated by explicit infeasibility status; requested loan not automatically resized
+FIN-002,HIGH,Builder patched; independent re-verification pending
+DATA-001,MEDIUM,Builder patched; independent re-verification pending
+DATA-002,MEDIUM,Count-change detection added; identical-count data changes remain a limitation
+DATA-003,MEDIUM,Builder patched; live geospatial validation pending
+APP-001,MEDIUM,OPEN: live browser smoke tests pending
+APP-002,MEDIUM,Builder patched; browser verification pending
+QA-001,MEDIUM,OPEN: production verification pending
+FIN-003,MEDIUM,DOCUMENTED LIMITATION
+POLICY-001,MEDIUM,DOCUMENTED LIMITATION
+UX-001,LOW,OPEN: labels/export semantics require future consistency review
