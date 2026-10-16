@@ -14,11 +14,12 @@ from student_report import create_student_pdf
 from forecast import ForecastAssumptions, project
 from public_policy import PublicPolicyAssumptions, evaluate
 from evidence import planning_area_context, district_production, records as evidence_sources
+from live_data import fetch_gis, fetch_acs, census_key, DataUnavailable, GIS_LAYER, ACS_BASE
 
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.8 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v1.9 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}
@@ -263,7 +264,54 @@ with tabs[2]:
     with st.expander('Source register, observation periods and live-data links'):
         st.dataframe(pd.DataFrame(evidence_sources()),hide_index=True,use_container_width=True)
         st.caption('Links open official agency pages. Source dates are different; no live API results are represented as verified 2026 values.')
-        st.download_button('Download evidence source register (CSV)',pd.DataFrame(evidence_sources()).to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v1.8_Source_Register.csv',mime='text/csv')
+        st.download_button('Download evidence source register (CSV)',pd.DataFrame(evidence_sources()).to_csv(index=False).encode('utf-8'),file_name='DC_Housing_Lab_v1.9_Source_Register.csv',mime='text/csv')
+    st.divider()
+    st.subheader('Live DC neighborhood evidence | optional public APIs')
+    st.caption('Live observations do NOT change rents, site costs, allowable density, or any development underwriting assumptions. DC GIS counts projects in the DC planning area, not the selected neighborhood. ACS data represent one tract containing the neighborhood map marker, not the entire neighborhood.')
+    if st.button('Refresh public data now',key='refresh_public_data'):
+        st.cache_data.clear()
+        st.session_state['data_refresh_requested']=True
+    @st.cache_data(ttl=86400,show_spinner=False)
+    def cached_gis(name):
+        return fetch_gis(name)
+    @st.cache_data(ttl=86400,show_spinner=False)
+    def cached_acs(name,key):
+        return fetch_acs(name,key)
+    try:
+        g=cached_gis(place)
+        st.success(f"DC GIS: {g['status']} | retrieved {g['retrieved_at']} UTC | {g['area']} planning area")
+        g1,g2,g3=st.columns(3)
+        g1.metric('Projects in public GIS layer',f"{g['metrics']['project_count']:,}")
+        g2.metric('Sum of reported affordable units',f"{g['metrics']['reported_unit_sum']:,}")
+        g3.metric('Projects missing unit counts',f"{g['metrics']['missing_units_rows']:,}")
+        st.caption('Layer covers projects started or completed since January 2015; it is NOT a current inventory, occupied unit count, net increase, or construction-completion total. Production and preservation are included. Unit sums may mix project statuses.')
+        if g['rows']:
+            show=[{'Project':row.get('PROJECT_NAME'),'Status':row.get('STATUS_PUBLIC'),'Units reported':row.get('TOTAL_AFFORDABLE_UNITS')} for row in g['rows']]
+            st.dataframe(pd.DataFrame(show),hide_index=True,use_container_width=True)
+            st.download_button('Download DC GIS records (CSV)',pd.DataFrame(g['rows']).to_csv(index=False).encode('utf-8'),file_name='DC_GIS_Planning_Area_Projects.csv',mime='text/csv')
+        st.markdown(f'[Official DC GIS layer and methodology]({GIS_LAYER})')
+    except (DataUnavailable,ValueError) as exc:
+        st.warning(f'DC GIS unavailable or unverified: {exc}. Historical evidence above remains available; no live count is shown.')
+    key=census_key()
+    try:
+        # Optionally also configure CENSUS_API_KEY in Streamlit secrets.
+        if not key:
+            try:key=str(st.secrets.get('CENSUS_API_KEY','')).strip()
+            except Exception:key=''
+        if not key:
+            st.info('Optional ACS Census-tract income data are disabled because a Census API key has not been configured in Streamlit secrets. No key is needed for the rest of DC Housing Lab.')
+        else:
+            a=cached_acs(place,key)
+            st.markdown(f"**2024 ACS 5-year Census tract:** {a['geography']} | retrieved {a['retrieved_at']} UTC")
+            if a['median_household_income'] is None:
+                st.warning('Census median household income unavailable for this tract.')
+            else:
+                st.metric('Census-tract median household income',f"${a['median_household_income']:,}")
+                if a['median_household_income_moe'] is not None:st.caption(f"ACS margin of error: ±${a['median_household_income_moe']:,}")
+            st.caption(a['note']+' Estimates are in 2024 inflation-adjusted dollars.')
+            st.markdown(f"[Census ACS 2024 5-year source]({ACS_BASE})")
+    except (DataUnavailable,ValueError) as exc:
+        st.warning(f'ACS unavailable or unverified: {exc}. No tract value is shown.')
     st.divider()
     st.subheader('Three public policy levers')
     st.write('Use the sidebar to change each intervention, or use the buttons below to apply the policies directly.')
@@ -414,7 +462,7 @@ with tabs[6]:
 - Actual restricted rents depend on the program, AMI vintage, household/unit sizing, and allowances. The illustration cannot establish legal eligibility.
 - A project can satisfy this simplified mathematical test while still being impossible to finance; likewise a project that fails it may be possible with other sources of capital.''')
     st.markdown('Relevant official resources: [DC Office of Planning](https://planning.dc.gov/) · [DC DHCD](https://dhcd.dc.gov/) · [HUD income limits](https://www.huduser.gov/portal/datasets/il.html).')
-st.divider();st.caption('DC Housing Lab v1.8 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
+st.divider();st.caption('DC Housing Lab v1.9 • October 2026 • Illustrative classroom tool; not investment, legal or eligibility advice.')
 
 with tabs[7]:
     st.subheader('Ten-year operating and affordability preservation outlook')
