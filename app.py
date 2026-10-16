@@ -19,7 +19,7 @@ from live_data import fetch_gis, fetch_acs, census_key, DataUnavailable, GIS_LAY
 st.set_page_config(page_title='DC Housing Lab | Sidwell Friends', page_icon='🏙️', layout='wide')
 st.markdown(CSS,unsafe_allow_html=True)
 st.markdown('<div class="hero-v14"><div class="eyebrow">URBAN PLANNING / AFFORDABLE HOUSING</div><h1>DC Housing Lab</h1><p>Build a neighborhood. Finance the housing. See who can afford to live there.</p></div>',unsafe_allow_html=True)
-st.caption('CLASSROOM EDITION v1.9.1 • Historical DC government evidence is separate from illustrative development assumptions.')
+st.caption('CLASSROOM EDITION v1.9.2 • Historical DC government evidence is separate from illustrative development assumptions.')
 
 if 'saved' not in st.session_state: st.session_state.saved=[]
 if 'comparison' not in st.session_state: st.session_state.comparison={}

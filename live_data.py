@@ -56,7 +56,7 @@ def summarize_projects(records):
 def fetch_gis(neighborhood, session=None, page_size=500, max_pages=20):
     if neighborhood not in CENTERS:raise ValueError('Unknown neighborhood')
     area=CENTERS[neighborhood][2]
-    where="PLANNING_AREA = '"+area.replace("'","''")+"'"
+    where="PLANNING_AREA = '"+area.upper().replace("'","''")+"'"
     records=[]; asof=utc_now()
     for page in range(max_pages):
         data=get_json(GIS_LAYER+'/query',{'where':where,'outFields':','.join(GIS_FIELDS),
@@ -96,7 +96,7 @@ def fetch_gis(neighborhood, session=None, page_size=500, max_pages=20):
         raise DataUnavailable('No GIS records matched '+repr(area)+
             '. This may be a planning-area naming mismatch or a true zero; '
             'zero is NOT verified. Source values include: '+examples)
-    if any(r.get('PLANNING_AREA') != area for r in records):
+    if any(str(r.get('PLANNING_AREA') or '').strip().casefold() != area.casefold() for r in records):
         raise DataUnavailable('GIS planning-area mismatch; results rejected.')
     return {'status':'live','area':area,'retrieved_at':asof,'rows':records,'metrics':summarize_projects(records)}
 
