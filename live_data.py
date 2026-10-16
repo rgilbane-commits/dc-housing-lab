@@ -72,7 +72,30 @@ def fetch_gis(neighborhood, session=None, page_size=500, max_pages=20):
     else:
         raise DataUnavailable('GIS pagination cap reached; incomplete data were not reported.')
     if not records:
-        return {'status':'empty','area':area,'retrieved_at':asof,'rows':[], 'metrics':summarize_projects([])}
+        # A zero-row attribute filter is not evidence that the planning area has
+        # zero projects. Query the service independently and inspect its values.
+        # This prevents a schema/value mismatch from being published as a fact.
+        observed=set()
+        for fallback_page in range(max_pages):
+            sample=get_json(GIS_LAYER+'/query',{'where':'1=1',
+                 'outFields':'OBJECTID,PLANNING_AREA', 'returnGeometry':'false',
+                 'orderByFields':'OBJECTID ASC', 'resultOffset':fallback_page*page_size,
+                 'resultRecordCount':page_size,'f':'json'},session=session)
+            if not isinstance(sample,dict) or not isinstance(sample.get('features'),list):
+                raise DataUnavailable('Unable to validate zero result: GIS fallback query failed.')
+            batch=sample['features']
+            observed.update(str(f.get('attributes',{}).get('PLANNING_AREA') or '').strip()
+                            for f in batch if isinstance(f.get('attributes'),dict))
+            if len(batch)<page_size and not sample.get('exceededTransferLimit'):
+                break
+        else:
+            raise DataUnavailable('Unable to verify empty planning-area result: GIS fallback pagination incomplete.')
+        if not observed or observed == {''}:
+            raise DataUnavailable('GIS returned no usable planning-area values; zero project count cannot be verified.')
+        examples=', '.join(sorted(v for v in observed if v)[:5])
+        raise DataUnavailable('No GIS records matched '+repr(area)+
+            '. This may be a planning-area naming mismatch or a true zero; '
+            'zero is NOT verified. Source values include: '+examples)
     if any(r.get('PLANNING_AREA') != area for r in records):
         raise DataUnavailable('GIS planning-area mismatch; results rejected.')
     return {'status':'live','area':area,'retrieved_at':asof,'rows':records,'metrics':summarize_projects(records)}
